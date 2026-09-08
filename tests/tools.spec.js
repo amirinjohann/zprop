@@ -1,17 +1,17 @@
 const {test,expect}=require('./auth-fixture');
 const fs=require('node:fs/promises');
 const {createBio}=require('./bio-helper');
-const ids=['bio-pages','short-links','transfer-files','vcards','host-html'];
+const ids=['bio-pages','short-links','transfer-files','vcards','host-html','qr-codes'];
 async function downloaded(page,button){const promise=page.waitForEvent('download');await button.click();const d=await promise;return {name:d.suggestedFilename(),text:await fs.readFile(await d.path(),'utf8')};}
 
-test('all five tools navigate to dedicated local bilingual pages',async({page,request},info)=>{
+test('all six tools navigate to dedicated local bilingual pages',async({page,request},info)=>{
   const errors=[],bad=[],external=[];
   page.on('pageerror',e=>errors.push(e.message));
   page.on('response',r=>{if(r.status()>=400)bad.push(r.url());});
   page.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:4173/'))external.push(r.url());});
   for(const id of ids){
     await page.goto('/landing.html?lang=en');
-    await expect(page.locator('.portal-features a')).toHaveCount(5);
+    await expect(page.locator('.portal-features a')).toHaveCount(6);
     await page.locator(`.portal-features a[href*="${id}.html"]`).click();
     await expect(page).toHaveURL(new RegExp(`/tools/${id}.html\\?lang=en`));
     await expect(page.locator('body')).toHaveAttribute('data-tool',id);
@@ -24,7 +24,7 @@ test('all five tools navigate to dedicated local bilingual pages',async({page,re
     expect(await page.locator('[data-tool-copy]').evaluateAll(els=>els.every(el=>el.textContent.trim()&&el.textContent!=='undefined'))).toBe(true);
   }
   expect(errors).toEqual([]);expect(bad).toEqual([]);expect(external).toEqual([]);
-  for (const removed of ['qr-codes','event-links','web-tools','analytics']) {
+  for (const removed of ['event-links','web-tools','analytics']) {
     expect((await request.get(`/tools/${removed}.html`)).status()).toBe(404);
   }
   await page.goto('/tools/bio-pages.html?lang=en');

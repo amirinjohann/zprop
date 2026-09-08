@@ -1,5 +1,5 @@
 const { test, expect } = require('./auth-fixture');
-const tools=['bio-pages','short-links','transfer-files','vcards','host-html'];
+const tools=['bio-pages','short-links','transfer-files','vcards','host-html','qr-codes'];
 
 test('English tool navigation paints a complete editor without BM or an extra session round trip', async ({ page }) => {
   await page.addInitScript(() => {
@@ -32,7 +32,7 @@ test('English tool navigation paints a complete editor without BM or an extra se
     await expect(page).toHaveURL(new RegExp(`/tools/${id}.html\\?lang=en`));
     await expect(page.locator('#tool-title')).toBeVisible();
     await expect.poll(() => page.evaluate(() => window.languageFrames.visible)).toBeGreaterThan(0);
-    await expect(page.locator('#tool-form:visible, #bio-library:visible')).toBeVisible();
+    await expect(page.locator('#tool-form:visible, #bio-library:visible, #qr-library:visible')).toBeVisible();
     expect(await page.evaluate(() => window.languageFrames.wrong)).toEqual([]);
   }
   expect(sessionRequests).toBe(0);

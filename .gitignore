@@ -5,6 +5,7 @@ node_modules/
 .accounts/
 .generated-sites/
 .short-links/
+.qr-codes/
 test-results/
 playwright-report/
 reference.html

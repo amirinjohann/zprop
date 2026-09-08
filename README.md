@@ -1,6 +1,6 @@
 # ZPROP tools
 
-A bilingual BM/EN tools portal. The homepage and `landing.html` show the phone landing design, with links to all five dedicated tools. The static-site creator is at `tools/host-html.html`. Property listings and property search are no longer part of the interface.
+A bilingual BM/EN tools portal. The homepage and `landing.html` show the phone landing design, with links to all six dedicated tools. The static-site creator is at `tools/host-html.html`. Property listings and property search are no longer part of the interface.
 
 ## Run
 
@@ -17,7 +17,7 @@ Opening the sign-in page as a local HTML file automatically takes you to http://
 
 ## Accounts
 
-Open `sign-in.html` and choose **Create account** with an email address and a password of 12–128 characters. Registration signs you in and returns you to the requested tool. Use **Sign out** in the header to revoke the session. All five tool pages and creation APIs require authentication. The homepage and shared sites, short links and file links remain public.
+Open `sign-in.html` and choose **Create account** with an email address and a password of 12–128 characters. Registration signs you in and returns you to the requested tool. Use **Sign out** in the header to revoke the session. All six tool pages and creation APIs require authentication. The homepage and shared sites, short links and file links remain public.
 
 Accounts persist in the private `.accounts/` directory with salted scrypt password hashes. Random session tokens use HTTP-only, SameSite cookies and expire after seven days. Sessions are held in memory, so restarting the server requires signing in again. Authentication requests have origin checks and a limit of 30 unsuccessful attempts per IP per 15 minutes. Password reset and email verification are not configured.
 
@@ -59,8 +59,11 @@ For local bio-page testing, the link-name prefix and published copy/open links u
 | Short links | Saved short URLs, custom or random names, copy/open controls and working redirects |
 | File link | Upload a PDF or Excel file and create a unique, persistent link with open/download/copy controls |
 | vCards | Downloadable `.vcf` contact cards |
+| QR Codes | URL, WhatsApp, Location, Event and Vcard QR codes with preview after creation, colors and PNG/SVG downloads |
 
 BM/EN and light/dark preferences persist across the dashboard, sign-in and tool pages.
+
+QR Codes is at `tools/qr-codes.html` and opens **Your QR codes**, with Create, Edit and Delete controls like Bio pages. Codes belong to the signed-in account and persist in private `.qr-codes/` storage across page reloads, sign-ins and server restarts. Choose URL, WhatsApp, Location, Event or Vcard, fill in the details and press **Create QR code** to save and display the preview. Reopen a saved code with **Edit**, make changes and press **Update QR code**. Changes do not appear in the preview until saved; **Cancel editing** restores the last saved values. Unsaved changes prompt before leaving. Deleting asks for confirmation and removes the saved record; previously downloaded static QR images still work. Download the updated PNG (512, 1024 or 2048 px) or SVG after editing to replace older files. WhatsApp uses a phone number with country code, Location opens Google Maps coordinates, Event stores its original timezone and stable iCalendar identity, and Vcard encodes a vCard 3.0 contact. Colors require dark modules on a lighter background; exports keep a four-module quiet zone. `GET/POST /api/qr-codes` and `GET/PUT/DELETE /api/qr-codes/<id>` enforce sessions, ownership, origins, payload validation and revision checks. Back up `.qr-codes/` alongside the other private storage directories. The build copies the pinned `qrcode-generator` dependency into `assets/vendor/qrcode.js`, with its MIT license alongside. Payloads live in `qr-model.js`, the editor and library in `qr-page.js` / `qr-page.css`, and persistence in `scripts/qr-codes.cjs`.
 
 Short links are created through `POST /api/short-links` and resolve directly at `/<name>` with an HTTP 302 redirect (for example, `https://zprop.tech/test123`). Existing `/s/<name>` URLs still work, and their records also resolve at the shorter address. Names used by the app, such as `tools`, `assets`, `api` and `sites`, are reserved. Records persist in the private `.short-links/` directory across server restarts. Names are case-insensitive, existing names cannot be overwritten, and only HTTP(S) destinations without embedded credentials are accepted. The displayed domain is zprop.tech; arbitrary domains cannot be provisioned by typing into the form. The former configuration-only drafts need to be created once using **Create short link**.
 
@@ -83,7 +86,7 @@ npm run build
 npm test -- --workers=2
 ```
 
-The build regenerates `index.html`, the five pages under `tools/`, and the overview page. Browser tests run in headless Microsoft Edge at desktop and mobile sizes. They cover site creation from pasted HTML and uploaded HTML/ZIP, relative assets and nested navigation, isolation, validation errors, URL conflicts, existing tools, translation and theme persistence. Screenshots are saved in `test-results/`. Test-created sites also remain in `.generated-sites/`.
+The build regenerates `index.html`, the six pages under `tools/`, and the overview page. Browser tests run in headless Microsoft Edge at desktop and mobile sizes. They cover site creation from pasted HTML and uploaded HTML/ZIP, relative assets and nested navigation, isolation, validation errors, URL conflicts, existing tools, translation and theme persistence. Screenshots are saved in `test-results/`. Test-created sites also remain in `.generated-sites/`.
 
 Each bio block has an On/Off status switch. Off blocks remain editable and saved, but are omitted from the preview, HTML download, published page and public page metadata. Save draft to retain status changes privately; Publish page / Save changes applies them to the live page. Older blocks default to On.
 

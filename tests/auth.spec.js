@@ -7,7 +7,7 @@ test('local-file tool links and direct tool pages reach server-backed sign-in', 
   const path = require('node:path');
   const { pathToFileURL } = require('node:url');
   const base = pathToFileURL(path.resolve(__dirname, '..') + path.sep);
-  const ids=['bio-pages','short-links','transfer-files','vcards','host-html'];
+  const ids=['bio-pages','short-links','transfer-files','vcards','host-html','qr-codes'];
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   for (const id of ids) {
@@ -91,7 +91,7 @@ test('signed-out tool clicks go directly to sign-in at the root and in a subdire
 });
 
 test('all tools and APIs require a server session, including encoded and uppercase routes', async ({ request }) => {
-  for (const route of ['/tools/bio-pages.html','/tools/short-links.html','/tools/transfer-files.html','/tools/vcards.html','/tools/host-html.html','/TOOLS/bio-pages.html','/%74ools/bio-pages.html','/tool-pages.js','/static-site.js','/bio-page.js','/bio-library.js']) {
+  for (const route of ['/tools/bio-pages.html','/tools/short-links.html','/tools/transfer-files.html','/tools/vcards.html','/tools/host-html.html','/tools/qr-codes.html','/qr-page.js','/TOOLS/bio-pages.html','/%74ools/bio-pages.html','/tool-pages.js','/static-site.js','/bio-page.js','/bio-library.js']) {
     const response = await request.get(route, { maxRedirects:0 });
     expect(response.status()).toBe(302); expect(response.headers().location).toContain('/sign-in.html?');
   }

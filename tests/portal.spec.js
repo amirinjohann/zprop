@@ -16,7 +16,7 @@ test('portal preserves language, links to sign-in and loads only local assets',a
   await expect(page.locator('.portal-faq details').first()).toHaveAttribute('open','');
   await page.locator('.nav-sign-in').click();
   await expect(page).toHaveURL(/sign-in.html\?lang=ms/);
-  await expect(page.locator('.sign-in-subtitle')).toContainText('lima alatan');
+  await expect(page.locator('.sign-in-subtitle')).toContainText('enam alatan');
   expect(external).toEqual([]);expect(errors).toEqual([]);
 });
 

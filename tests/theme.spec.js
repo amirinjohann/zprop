@@ -1,5 +1,5 @@
 const {test,expect}=require('./auth-fixture');
-const tools=['bio-pages','short-links','transfer-files','vcards','host-html'];
+const tools=['bio-pages','short-links','transfer-files','vcards','host-html','qr-codes'];
 
 test('theme persists across every page and has bilingual keyboard controls',async({page},info)=>{
   await page.goto('/?lang=en');

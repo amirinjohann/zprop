@@ -7,6 +7,7 @@ const root=path.resolve(__dirname,'..');
 const catalogue=window.ZPROP_TOOLS;
 const esc=s=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 fs.mkdirSync(path.join(root,'tools'),{recursive:true});
+fs.copyFileSync(require.resolve('qrcode-generator'), path.join(root,'assets/vendor/qrcode.js'));
 for(const tool of catalogue){
   const sidebar=catalogue.map(t=>`<a href="${t.id}.html" data-local data-tool-link="${t.id}" ${t.id===tool.id?'aria-current="page"':''}><span aria-hidden="true">${t.icon}</span><span data-tool-name="${t.id}">${t.name[0]}</span><span class="tool-nav-arrow" aria-hidden="true">↗</span></a>`).join('\n');
   const page=`<!DOCTYPE html>
@@ -19,6 +20,7 @@ for(const tool of catalogue){
 <div class="tool-bottom"><a href="../landing.html" data-local><span aria-hidden="true">←</span> <span data-tool-copy="allTools">Semua alatan</span></a><a href="../index.html#contact" data-local><span data-tool-copy="help">Perlukan bantuan?</span> ↗</a></div></main></div>
 <footer class="portal-footer"><span>© <span data-year>2026</span> ZPROP. <span data-copy="rights">Hak cipta terpelihara.</span></span><a href="../index.html" data-local><span data-copy="backWebsite">Ke laman web ZPROP</span> ↗</a><span data-copy="footerLine">Identiti ZPROP. Ruang milik anda.</span></footer></div></body></html>`;
   let output=page.replaceAll('../index.html#contact','../landing.html#how-it-works');
+  if(tool.id==='qr-codes') output=output.replace('<script src="../tool-pages.js" defer></script>','<script src="../assets/vendor/qrcode.js" defer></script><script src="../qr-model.js" defer></script><script src="../qr-page.js" defer></script>').replace('</head>','<link rel="stylesheet" href="../qr-page.css"></head>');
   if(tool.id==='host-html') output=output.replace('../tool-pages.js','../static-site.js').replace('</head>','<link rel="stylesheet" href="../static-site.css"></head>');
   if(tool.id==='bio-pages') output=output.replace('<script src="../tool-pages.js" defer></script>','<script src="../bio-model.js" defer></script><script src="../bio-library.js" defer></script><script src="../bio-drag.js" defer></script><script src="../bio-page.js" defer></script>').replace('</head>','<link rel="stylesheet" href="../bio-page.css"></head>');
   // Finish translating and mounting the editor before the incoming page is

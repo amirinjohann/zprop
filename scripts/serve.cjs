@@ -7,6 +7,7 @@ const links = require('./short-links.cjs');
 const fileLinks = require('./file-links.cjs');
 const auth = require('./auth.cjs');
 const bioPages = require('./bio-pages.cjs');
+const qrCodes = require('./qr-codes.cjs');
 const { publicOrigin } = require('../public-origin.js');
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || '127.0.0.1';
@@ -19,7 +20,7 @@ http.createServer(async (req, res) => {
   // Reject ambiguous Windows paths before routing or resolving a file.
   if (pathname.includes('\\') || pathname.includes('\0') || pathname.split('/').some(part => part === '..' || /[. ]$/.test(part))) { res.writeHead(400).end(); return; }
   if (await auth.handle(req, res, pathname)) return;
-  const protectedPage = /^\/tools(?:\/|$)/i.test(pathname) || /^\/(tool-pages|static-site|bio-page|bio-library)\.js$/i.test(pathname);
+  const protectedPage = /^\/tools(?:\/|$)/i.test(pathname) || /^\/(tool-pages|static-site|bio-page|bio-library|qr-page)\.js$/i.test(pathname);
   if (protectedPage || pathname.startsWith('/api/')) {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Vary', 'Cookie');
@@ -33,15 +34,16 @@ http.createServer(async (req, res) => {
     }
   }
   const bioRoute = pathname.match(/^\/api\/bio-pages(?:\/([a-z0-9-]+))?$/);
-  if (bioRoute) {
+  const qrRoute = pathname.match(/^\/api\/qr-codes(?:\/([^/]+))?$/);
+  if (bioRoute || qrRoute) {
     const json = (status, data) => res.writeHead(status, {'Content-Type':'application/json','Cache-Control':'no-store'}).end(JSON.stringify(data));
     if (req.method !== 'GET' && !auth.sameOrigin(req)) {json(403,{error:'origin'});return;}
     if (pendingCreates >= 8) {json(429,{error:'busy'});return;}
     const previous=creationQueue; let release;
     creationQueue=new Promise(resolve=>{release=resolve;});pendingCreates++;
     await previous;
-    try{json(req.method==='POST'?201:200,await bioPages.handle(req,bioRoute[1],auth.session(req).user.id));}
-    catch(error){json(error.status||500,{error:error.status?error.message:'server'});}
+    try{json(req.method==='POST'?201:200,await (qrRoute?qrCodes:bioPages).handle(req,(qrRoute||bioRoute)[1],auth.session(req).user.id));}
+    catch(error){json(error.status||(qrRoute&&error.key?400:500),{error:error.status?error.message:qrRoute&&error.key?error.key:'server',...(qrRoute&&error.field?{field:error.field}:{})});}
     finally{pendingCreates--;release();}
     return;
   }

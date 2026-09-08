@@ -1,0 +1,135 @@
+const {test,expect}=require('./auth-fixture');
+const crypto=require('node:crypto');
+const sample={type:'url',timeZone:'Asia/Kuala_Lumpur',state:{name:'Saved QR',url:'https://example.com/original',foreground:'#183e32',background:'#ffffff',size:'1024'}};
+
+test('QR library creates, reopens, edits, cancels and deletes persistent records',async({page,request},info)=>{
+  await page.goto('/tools/qr-codes.html?lang=en');
+  await expect(page.locator('#qr-library')).toBeVisible();
+  await expect(page.locator('#tool-form')).toBeHidden();
+  await expect(page.locator('.qr-library-empty')).toBeVisible();
+  await page.locator('#new-qr').click();
+  await page.locator('[name=name]').fill('My property QR');
+  await page.locator('[name=url]').fill('https://example.com/original');
+  await expect(page.locator('#qr-preview svg')).toHaveCount(0);
+  await page.locator('#create-qr').click();
+  await expect(page.locator('#tool-status')).toHaveText('Your QR code is ready to download.');
+  const id=new URL(page.url()).searchParams.get('qr');expect(id).toBeTruthy();
+  await page.reload();
+  await expect(page.locator('[name=name]')).toHaveValue('My property QR');
+  await expect(page.locator('[name=url]')).toHaveValue('https://example.com/original');
+  await expect(page.locator('#qr-preview svg')).toBeVisible();
+  await page.locator('#back-qr-list').click();
+  const card=page.locator(`[data-qr-id="${id}"]`);
+  await expect(card).toContainText('My property QR');
+  await expect(card).toContainText('URL · Saved');
+  await page.screenshot({path:`test-results/qr-library-${info.project.name}.png`,fullPage:true});
+  await card.locator('[data-qr-action=edit]').click();
+  await page.locator('[name=url]').fill('https://example.com/updated');
+  await expect(page.locator('#download-qr-png')).toBeDisabled();
+  await page.locator('#create-qr').click();
+  await expect(page.locator('#tool-status')).toContainText('QR code updated.');
+  expect(new URL(page.url()).searchParams.get('qr')).toBe(id);
+  expect((await (await request.get('/api/qr-codes')).json()).codes).toHaveLength(1);
+  await page.locator('[name=url]').fill('invalid');
+  await page.locator('#create-qr').click();
+  await expect(page.locator('#tool-status')).toContainText('valid http://');
+  await page.locator('#cancel-qr-edit').click();
+  await expect(page.locator('[name=url]')).toHaveValue('https://example.com/updated');
+  await expect(page.locator('#download-qr-svg')).toBeEnabled();
+  await page.locator('[name=name]').fill('Unsaved');
+  page.once('dialog',dialog=>dialog.dismiss());
+  await page.locator('#back-qr-list').click();
+  await expect(page.locator('#tool-form')).toBeVisible();
+  await page.locator('#cancel-qr-edit').click();
+  await page.locator('#back-qr-list').click();
+  await page.reload();
+  await card.locator('[data-qr-action=edit]').click();
+  await expect(page.locator('[name=url]')).toHaveValue('https://example.com/updated');
+  await page.locator('#back-qr-list').click();
+  await card.locator('[data-qr-action=delete]').click();
+  await expect(page.locator('#delete-qr-name')).toHaveText('My property QR');
+  await page.locator('#cancel-delete-qr').click();
+  expect((await request.get('/api/qr-codes/'+id)).status()).toBe(200);
+  await card.locator('[data-qr-action=delete]').click();
+  await page.locator('#confirm-delete-qr').click();
+  await expect(page.locator('.qr-library-empty')).toBeVisible();
+  expect((await request.get('/api/qr-codes/'+id)).status()).toBe(404);
+  await page.reload();await expect(page.locator('.qr-library-empty')).toBeVisible();
+});
+
+test('QR records enforce account isolation, validation, origins and revisions',async({request,browser,baseURL})=>{
+  const response=await request.post('/api/qr-codes',{data:sample});expect(response.status()).toBe(201);
+  const record=await response.json();
+  const other=await browser.newContext();
+  try {
+    expect((await other.request.get(baseURL+'/api/qr-codes')).status()).toBe(401);
+    expect((await other.request.post(baseURL+'/api/qr-codes',{data:sample})).status()).toBe(401);
+    await other.request.post(baseURL+'/api/auth/register',{data:{email:crypto.randomUUID()+'@example.com',password:'Test-password-123!'}});
+    expect((await (await other.request.get(baseURL+'/api/qr-codes')).json()).codes).toEqual([]);
+    for(const method of ['get','put','delete']) expect((await other.request[method](baseURL+'/api/qr-codes/'+record.id,{data:{...sample,revision:1}})).status()).toBe(404);
+    for(const method of ['put','delete']) expect((await request[method]('/api/qr-codes/'+record.id,{headers:{Origin:'https://evil.example'},data:{...sample,revision:1}})).status()).toBe(403);
+    expect((await request.post('/api/qr-codes',{headers:{Origin:'null'},data:sample})).status()).toBe(403);
+    const updates=await Promise.all([request.put('/api/qr-codes/'+record.id,{data:{...sample,revision:1}}),request.put('/api/qr-codes/'+record.id,{data:{...sample,revision:1}})]);
+    expect(updates.map(r=>r.status()).sort()).toEqual([200,409]);
+    expect((await request.delete('/api/qr-codes/'+record.id,{data:{revision:1}})).status()).toBe(409);
+    const bad=[{...sample,type:'__proto__'},{...sample,type:['url']},{...sample,state:{...sample.state,url:'javascript:alert(1)'}},{...sample,state:{...sample.state,foreground:'#ffffff'}},{...sample,state:{...sample.state,size:'99999'}},{...sample,timeZone:'invalid'},{...sample,state:{...sample.state,name:'x'.repeat(301)}}];
+    for(const data of bad) expect((await request.post('/api/qr-codes',{data})).status()).toBe(400);
+    expect((await request.post('/api/qr-codes',{data:'x'.repeat(17000),headers:{'Content-Type':'application/json'}})).status()).toBe(413);
+    const owner=(await (await request.get('/api/auth/session')).json()).user.id;
+    expect((await request.get(`/.qr-codes/${owner}/${record.id}.json`)).status()).toBe(403);
+    expect((await (await request.get('/api/qr-codes')).json()).codes).toHaveLength(1);
+  } finally {await other.close();}
+});
+
+test('save failures retain edits; list and delete failures can be retried',async({page,request})=>{
+  const record=await (await request.post('/api/qr-codes',{data:sample})).json();
+  await page.route('**/api/qr-codes',route=>route.fulfill({status:500,json:{error:'server'}}));
+  await page.goto('/tools/qr-codes.html?lang=en');
+  await expect(page.locator('#qr-library-status')).toContainText('Could not load');
+  await page.unroute('**/api/qr-codes');
+  await page.getByRole('button',{name:'Try again',exact:true}).click();
+  const card=page.locator(`[data-qr-id="${record.id}"]`);
+  await card.locator('[data-qr-action=edit]').click();
+  await page.locator('[name=name]').fill('Retained edit');
+  await page.route('**/api/qr-codes/'+record.id,route=>route.fulfill({status:409,json:{error:'conflict'}}));
+  await page.locator('#create-qr').click();
+  await expect(page.locator('#tool-status')).toContainText('changed elsewhere');
+  await expect(page.locator('[name=name]')).toHaveValue('Retained edit');
+  await expect(page.locator('#qr-dirty')).toBeVisible();
+  await page.unroute('**/api/qr-codes/'+record.id);
+  await page.locator('#create-qr').click();
+  await expect(page.locator('#tool-status')).toContainText('QR code updated.');
+  await page.locator('#back-qr-list').click();
+  await page.route('**/api/qr-codes/'+record.id,route=>route.fulfill({status:500,json:{error:'server'}}));
+  await card.locator('[data-qr-action=delete]').click();
+  await page.locator('#confirm-delete-qr').click();
+  await expect(page.locator('#delete-qr-status')).toContainText('Could not delete');
+  await expect(card).toBeVisible();
+  await page.unroute('**/api/qr-codes/'+record.id);
+  await page.locator('#confirm-delete-qr').click();
+  await expect(page.locator('.qr-library-empty')).toBeVisible();
+});
+
+test('saved events retain their original timezone and names are rendered as text',async({page,request,browser,baseURL,context})=>{
+  const input={...sample,type:'event',state:{name:'<img src=x onerror=alert(1)>',eventTitle:'Open house',start:'2026-10-10T09:00',end:'2026-10-10T11:00',foreground:'#183e32',background:'#ffffff',size:'1024'}};
+  const response=await request.post('/api/qr-codes',{data:input});expect(response.status()).toBe(201);
+  const record=await response.json();expect(record.payload).toContain('DTSTART:20261010T010000Z');
+  await page.goto('/tools/qr-codes.html?lang=en');
+  await expect(page.locator('.qr-code-card h3')).toHaveText(input.state.name);
+  await expect(page.locator('.qr-code-card img')).toHaveCount(0);
+  await page.locator('[data-language=ms]').click();
+  await expect(page.locator('#qr-library .workspace-title')).toHaveText('Kod QR anda');
+  await page.locator('.theme-toggle').click();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  const other=await browser.newContext({storageState:await context.storageState(),timezoneId:'America/New_York'});
+  try {
+    const editor=await other.newPage();await editor.goto(baseURL+'/tools/qr-codes.html?lang=en&qr='+record.id);
+    await expect(editor.locator('[name=start]')).toHaveValue('2026-10-10T09:00');
+    await expect(editor.locator('#qr-timezone')).toHaveText('Asia/Kuala_Lumpur');
+    await editor.locator('[name=eventTitle]').fill('Updated event');await editor.locator('#create-qr').click();
+    await expect(editor.locator('#tool-status')).toContainText('QR code updated.');
+    const updated=await (await request.get('/api/qr-codes/'+record.id)).json();
+    expect(updated.payload).toContain('DTSTART:20261010T010000Z');
+    expect(updated.event.uid).toBe(record.event.uid);
+  }finally {await other.close();}
+});
