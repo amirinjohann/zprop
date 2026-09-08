@@ -84,3 +84,5 @@ npm test -- --workers=2
 ```
 
 The build regenerates `index.html`, the five pages under `tools/`, and the overview page. Browser tests run in headless Microsoft Edge at desktop and mobile sizes. They cover site creation from pasted HTML and uploaded HTML/ZIP, relative assets and nested navigation, isolation, validation errors, URL conflicts, existing tools, translation and theme persistence. Screenshots are saved in `test-results/`. Test-created sites also remain in `.generated-sites/`.
+
+Each bio block has an On/Off status switch. Off blocks remain editable and saved, but are omitted from the preview, HTML download, published page and public page metadata. Save draft to retain status changes privately; Publish page / Save changes applies them to the live page. Older blocks default to On.

@@ -22,6 +22,7 @@
     slug:['Nama pautan','Link name'],slugHelp:['Wajib. Gunakan 3–50 huruf kecil, nombor atau sempang.','Required. Use 3–50 lowercase letters, numbers or hyphens.'],myPages:['Halaman bio anda','Your bio pages'],manageHelp:['Cipta, edit dan urus semua halaman bio anda.','Create, edit and manage all your bio pages.'],createPage:['Cipta halaman bio','Create bio page'],createHelp:['Pilih nama pautan dahulu. Kemudian sesuaikan kandungan dan terbitkan halaman anda.','Choose a link name first. Then customize your content and publish your page.'],editPage:['Edit','Edit'],deletePage:['Padam halaman','Delete page'],deleteHelp:['Halaman dan kandungannya akan dipadam. Pautan yang diterbitkan tidak lagi boleh dibuka.','This removes the page and its content. Its published link will no longer open.'],cancel:['Batal','Cancel'],noPages:['Halaman pertama anda bermula di sini.','Your first page starts here.'],draft:['Draf','Draft'],published:['Diterbitkan','Published'],saveDraft:['Simpan draf','Save draft'],saveChanges:['Simpan perubahan','Save changes'],saving:['Sedang menyimpan…','Saving…'],draftSaved:['Draf disimpan.','Draft saved.'],unsaved:['Perubahan belum disimpan','Unsaved changes'],discard:['Tinggalkan perubahan yang belum disimpan?','Discard your unsaved changes?'],loadingPages:['Memuatkan halaman anda…','Loading your pages…'],loadError:['Halaman tidak dapat dimuatkan. Sila cuba lagi.','Could not load your pages. Please try again.'],retry:['Cuba lagi','Retry'],notFound:['Halaman ini tidak tersedia untuk akaun anda.','This page is not available for your account.'],conflict:['Halaman telah diubah dalam tab lain. Muat semula sebelum menyimpan.','This page changed in another tab. Reload it before saving.'],drag:['Seret untuk menyusun. Papan kekunci: anak panah atas atau bawah.','Drag to reorder. Keyboard: use the up or down arrow keys.'],moved:['Blok dialihkan ke kedudukan','Block moved to position'],blocksHelp:['Seret pemegang untuk menyusun blok anda.','Drag the handles to arrange your blocks.']
   });
   copy.profileHelp = ['Tambah foto, nama dan pengenalan anda.', 'Add your photo, name and introduction.'];
+  Object.assign(copy,{blockStatus:['Status blok','Block status'],enabled:['Aktif','On'],disabled:['Tidak aktif','Off'],statusHelp:['Simpan perubahan untuk mengemas kini status pada halaman langsung.','Save changes to update the status on your live page.']});
   const t = key => copy[key]?.[language] || key;
   const label = key => `<span data-bio-copy="${key}">${t(key)}</span>`;
   function shell() {
@@ -59,7 +60,7 @@
   function changed() { library.changed(); status(''); renderPreview(); }
   function validUrl(value) { try { const url = new URL(value); return ['http:','https:'].includes(url.protocol) && !!url.hostname && !url.username && !url.password; } catch { return false; } }
   function controls(block, index) {
-    return `<div class="bio-block-controls">${[['duplicate','⧉'],['remove','×']].map(([action,icon]) => `<button type="button" data-block-action="${action}" aria-label="${t(action)}" title="${t(action)}">${icon}</button>`).join('')}</div>`;
+    return `<div class="bio-block-controls"><button type="button" class="bio-status-toggle" data-block-action="toggle" role="switch" aria-checked="${block.enabled!==false}" aria-label="${t('blockStatus')}: ${t(block.type)} ${index+1}" title="${t('statusHelp')}"><span class="bio-switch-track" aria-hidden="true"></span><span>${t(block.enabled===false?'disabled':'enabled')}</span></button>${[['duplicate','⧉'],['remove','×']].map(([action,icon]) => `<button type="button" data-block-action="${action}" aria-label="${t(action)}" title="${t(action)}">${icon}</button>`).join('')}</div>`;
   }
   function renderBlocks() {
     $('#bio-blocks').innerHTML = state.blocks.length ? state.blocks.map((block,index) => {
@@ -72,11 +73,13 @@
       if (block.type === 'divider') fields = `<p class="bio-hint">${label('dividerNote')}</p>`;
       return `<article class="bio-block" data-block-id="${block.id}" data-block-type="${block.type}"><div class="bio-block-top"><button type="button" class="bio-drag-handle" aria-label="${t('drag')}" title="${t('drag')}">⠿</button><span class="bio-block-number">${String(index+1).padStart(2,'0')}</span><h4>${icons[block.type]} ${t(block.type)}</h4>${controls(block,index)}</div><div class="bio-block-fields">${fields}</div></article>`;
     }).join('') : `<p class="bio-empty">${t('noBlocks')}</p>`;
+    for (const block of state.blocks) $(`[data-block-id="${block.id}"]`).classList.toggle('is-off',block.enabled===false);
     renderProfileThumbs();
   }
   // This same markup is used for the preview, HTML download and published page.
   function markup() {
     return `<div class="bio-page-blocks">${state.blocks.map(block => {
+      if (block.enabled === false) return '';
       if (block.type === 'profile') return `<header class="bio-page-profile">${block.photo ? `<img class="bio-avatar-image" src="${block.photo}" alt="${esc(block.name || '')}">` : `<div class="bio-avatar-letter">${esc((block.name || '').trim().slice(0,1) || 'Z')}</div>`}<h3>${esc(block.name || t('emptyName'))}</h3><p>${esc(block.bio || '')}</p></header>`;
       if (block.type === 'link') return `<a class="bio-page-link" ${validUrl(block.url)?`href="${esc(block.url)}" target="_blank" rel="noopener noreferrer"`:''}>${esc(block.label || t('link'))}<span aria-hidden="true">↗</span></a>`;
       if (block.type === 'heading') return `<h2 class="bio-page-heading">${esc(block.heading || t('heading'))}</h2>`;
@@ -123,6 +126,10 @@
     const button = event.target.closest('[data-block-action]'); if (!button || publishing) return;
     const id = Number(button.closest('[data-block-id]').dataset.blockId), index = state.blocks.findIndex(block => block.id === id), action = button.dataset.blockAction;
     let focusId = id;
+    if (action === 'toggle') {
+      state.blocks[index].enabled = state.blocks[index].enabled === false;
+      renderBlocks(); changed(); $(`[data-block-id="${id}"] [data-block-action=toggle]`).focus(); return;
+    }
     if (action === 'removePhoto') state.blocks[index].photo = '';
     if (action === 'remove') { state.blocks.splice(index,1); focusId = state.blocks[Math.min(index,state.blocks.length-1)]?.id; }
     if (action === 'duplicate') { if (state.blocks.length >= 30) return status('blockLimit',true); const block = {...state.blocks[index],id:nextId++}; state.blocks.splice(index+1,0,block); focusId=block.id; }
@@ -164,12 +171,16 @@
     if (loading) { status('imageLoading',true); return false; }
     for (const input of form.querySelectorAll('[data-key=url]')) input.setCustomValidity(validUrl(input.value) ? '' : t('invalidUrl'));
     form.elements.slug.setCustomValidity(form.elements.slug.value && !/^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/.test(form.elements.slug.value) ? t('slugError') : '');
-    if (!form.checkValidity()) { tab('content'); document.querySelectorAll('#bio-content details').forEach(el => { el.open = true; }); form.reportValidity(); return false; }
-    if (state.blocks.some(block => block.type === 'image' && !block.src)) { tab('content'); status('imageMissing',true); return false; }
+    for (const input of form.querySelectorAll('input,textarea,select')) {
+      const blockId = input.closest('[data-block-id]')?.dataset.blockId;
+      if (blockId && state.blocks.find(block => block.id === Number(blockId))?.enabled === false) continue;
+      if (!input.checkValidity()) { tab('content'); input.reportValidity(); return false; }
+    }
+    if (state.blocks.some(block => block.enabled !== false && block.type === 'image' && !block.src)) { tab('content'); status('imageMissing',true); return false; }
     if (state.blocks.reduce((sum,block)=>sum+imageBytes(block.type === 'profile' ? block.photo : block.src),0)>20*1024*1024) { status('imageTotal',true); return false; }
     return true;
   }
-  function documentHtml() { const profile = state.blocks.find(block => block.type === 'profile'); return `<!DOCTYPE html><html lang="${language?'en':'ms'}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${esc(profile?.bio || '')}"><title>${esc(profile?.name || form.elements.slug.value || 'Bio page')} — ZPROP</title><style>${pageStyles}html{height:100%;background:${state.background}}body{margin:0;min-height:100%;${variables()}}.bio-document{max-width:520px;margin:auto;min-height:100vh}</style></head><body><main class="bio-document">${markup()}</main></body></html>`; }
+  function documentHtml() { const profile = state.blocks.find(block => block.type === 'profile' && block.enabled !== false); return `<!DOCTYPE html><html lang="${language?'en':'ms'}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${esc(profile?.bio || '')}"><title>${esc(profile?.name || form.elements.slug.value || 'Bio page')} — ZPROP</title><style>${pageStyles}html{height:100%;background:${state.background}}body{margin:0;min-height:100%;${variables()}}.bio-document{max-width:520px;margin:auto;min-height:100vh}</style></head><body><main class="bio-document">${markup()}</main></body></html>`; }
   $('[data-action=downloadHtml]').addEventListener('click', () => {
     if (!validate()) return;
     try { const url = URL.createObjectURL(new Blob([documentHtml()],{type:'text/html;charset=utf-8'})); const a = document.createElement('a'); a.href=url; a.download='zprop-page.html'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); status('saved'); } catch { status('downloadError',true); }

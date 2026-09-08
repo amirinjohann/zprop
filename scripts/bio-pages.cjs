@@ -39,16 +39,19 @@ function model(value, publish, limit=30) {
   result.blocks=value.blocks.map(block=>{
     if(!block || !Number.isSafeInteger(block.id) || block.id<1 || ids.has(block.id))throw fail('request'); ids.add(block.id);
     const out={id:block.id,type:block.type};
+    if(block.enabled!==undefined && typeof block.enabled!=='boolean')throw fail('request');
+    if(block.enabled!==undefined)out.enabled=block.enabled;
+    const publishBlock=publish&&block.enabled!==false;
     const fields={profile:{name:100,bio:1000},link:{label:100,url:4096},text:{text:3000},heading:{heading:200},image:{alt:200,caption:300},divider:{}};
     if(!Object.hasOwn(fields,block.type))throw fail('request');
     for(const [key,max] of Object.entries(fields[block.type]))out[key]=string(block[key] || '',max);
-    if(block.type==='image') {out.src=image(block.src); if(publish&&!out.src)throw fail('imageMissing');}
-    if(block.type==='profile') {out.photo=image(block.photo);if(publish&&!out.name.trim())throw fail('request');}
-    if(publish&&['link','text','heading'].includes(block.type)&&!out[block.type==='link'?'label':block.type].trim())throw fail('request');
-    if(out.type==='link'&&out.url) {
+    if(block.type==='image') {out.src=image(block.src); if(publishBlock&&!out.src)throw fail('imageMissing');}
+    if(block.type==='profile') {out.photo=image(block.photo);if(publishBlock&&!out.name.trim())throw fail('request');}
+    if(publishBlock&&['link','text','heading'].includes(block.type)&&!out[block.type==='link'?'label':block.type].trim())throw fail('request');
+    if(out.type==='link'&&out.url&&block.enabled!==false) {
       let url;try{url=new URL(out.url);}catch{throw fail('invalidUrl');}
       if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw fail('invalidUrl');
-    } else if(publish&&out.type==='link')throw fail('invalidUrl');
+    } else if(publishBlock&&out.type==='link')throw fail('invalidUrl');
     return out;
   });
   return result;
