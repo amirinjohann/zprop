@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.accounts/
+.generated-sites/
+.short-links/
+test-results/
+playwright-report/
+reference.html
+listings-reference.html

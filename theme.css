@@ -1,0 +1,63 @@
+/* Shared theme across the public site, portal and tool pages. Light stays default. */
+:root{color-scheme:light}
+html[data-language-pending] .portal-shell{visibility:hidden}
+.theme-toggle{display:inline-grid;place-items:center;width:36px;height:36px;flex:0 0 36px;padding:7px;border:1px solid #c3cdbc;border-radius:50%;background:transparent;color:#183e32;cursor:pointer}
+.theme-toggle svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.theme-toggle .theme-sun{display:none}
+.theme-toggle:hover{background:#edf1e7}
+.theme-toggle:focus-visible{outline:3px solid #8a9d68;outline-offset:4px}
+html[data-theme=dark]{color-scheme:dark;--ink:#e8eee3;--green:#27533e;--green-dark:#18392d;--sage:#c8d8b9;--cream:#19251e;--text:#b4c0b5;--border:#34463a;--portal-bg:#101a15;--panel:#19251e;--line:#34463a;--muted:#b4c0b5;--theme-accent:#bdd3ad}
+html[data-theme=dark] body{background:#101a15;color:var(--ink)}
+html[data-theme=dark] body:before{background:radial-gradient(ellipse at 100% 35%,#24452b55,transparent 55%)}
+html[data-theme=dark] .theme-toggle{border-color:#50644f;color:var(--theme-accent)}
+html[data-theme=dark] .theme-toggle:hover{background:#26392b}
+html[data-theme=dark] .theme-toggle .theme-moon{display:none}
+html[data-theme=dark] .theme-toggle .theme-sun{display:block}
+html[data-theme=dark] :is(a,button,input,select,textarea,summary):focus-visible{outline-color:var(--theme-accent)}
+/* The original public website. */
+html[data-theme=dark] :is(.site-header,.search-box,.property-card,dialog,.contact-form){background:var(--panel);color:var(--ink)}
+html[data-theme=dark] :is(.site-header nav.open,.save-button){background:var(--panel)}
+html[data-theme=dark] :is(.services-section,.career-banner,.empty-state){background:#16221b}
+html[data-theme=dark] :is(.search-tabs,.property-bottom,.footer-bottom){border-color:var(--border)}
+html[data-theme=dark] :is(.language-switch button,.search-field input,.search-field select,.promise-strip>div,.property-location,.property-specs,.property-bottom,.listing-bottom p,.footer-top>span){color:var(--muted)}
+html[data-theme=dark] :is(.language-switch button[aria-pressed=true],.property-bottom button,.save-button){color:var(--theme-accent)}
+html[data-theme=dark] .save-button[aria-pressed=true] svg{fill:var(--theme-accent)}
+html[data-theme=dark] .property-badge{background:#1c3529ed;color:#d4e2c6}
+html[data-theme=dark] .property-image{background:#26392b}
+html[data-theme=dark] :is(.contact-form input,.contact-form select,.contact-form textarea){background:#101a15;border-color:var(--border);color:var(--ink)}
+html[data-theme=dark] :is(input,textarea)::placeholder{color:#9aa99b}
+html[data-theme=dark] option{background:#19251e;color:#e8eee3}
+html[data-theme=dark] :is(.button-outline:hover,.filter-pills button:hover:not(.active)){background:#26392b}
+html[data-theme=dark] :is(.service-card,.about-values,.faq-list details){border-color:var(--border)}
+html[data-theme=dark] .dialog-close{background:#19251e;color:#e8eee3}
+html[data-theme=dark] .noscript-notice{background:#26392b;color:#e8eee3}
+/* Portal, sign-in and navigation retain the green identity. */
+html[data-theme=dark] :is(.portal-brand,.portal-nav .nav-sign-in,.portal-nav .nav-create,.portal-nav>a:hover,.portal-language button[aria-pressed=true],.portal-features,.section-kicker,.guide-number,.portal-faq summary:after,.sign-in-bottom>a,.support-button,.back-portal){color:var(--theme-accent)}
+html[data-theme=dark] :is(.portal-nav,.portal-language button,.explore-link,.portal-preview-note,.scene-caption,.portal-footer,.portal-footer>a,.sign-in-bottom,.password-label button,#toggle-password,.sign-in-divider){color:var(--muted)}
+html[data-theme=dark] :is(.portal-badge,.guide-grid>a,.sign-in-symbol,.auth-notice){background:#1c2c21;border-color:var(--line);color:#c0d2b6}
+html[data-theme=dark] .portal-badge>span:last-child:not(.live-dot){color:#d6e3cc}
+html[data-theme=dark] :is(.portal-hero h1 span,.sign-in-story h1>span){color:var(--theme-accent)}
+html[data-theme=dark] :is(.portal-features i,.portal-features>a i,.portal-features>span:nth-child(3n+2) i,.guide-arrow){color:#a6be92}
+html[data-theme=dark] .portal-features>a:hover{background:#26392b;border-color:var(--line)}
+html[data-theme=dark] .sign-in-card{box-shadow:0 16px 55px #0003}
+html[data-theme=dark] :is(#sign-in-form>label,.password-label label,#auth-status){color:#d6e3cc}
+html[data-theme=dark] #sign-in-form input{background:#101a15;border-color:var(--line);color:var(--ink)}
+html[data-theme=dark] .sign-in-divider:before,html[data-theme=dark] .sign-in-divider:after{background:var(--line)}
+html[data-theme=dark] .support-button{border-color:#50644f}
+html[data-theme=dark] .live-dot{background:var(--theme-accent)}
+html[data-theme=dark] .portal-faq summary::after{color:var(--theme-accent)}
+/* Editable tool surfaces. QR codes and HTML documents keep their own canvas. */
+html[data-theme=dark] :is(.tool-workspace,.bio-preview){background:var(--panel);border-color:var(--line)}
+html[data-theme=dark] :is(.tool-preview,.metric,.tool-heading-icon,.analytics-empty,.tool-editor input[type=file]){background:#16221b;border-color:var(--line)}
+html[data-theme=dark] :is(.tool-editor input,.tool-editor textarea,.tool-output){background:#101a15;border-color:var(--line);color:var(--ink)}
+html[data-theme=dark] :is(.tools-sidebar nav a>span:first-child,.tool-breadcrumb a,.tool-heading-icon,.tool-capabilities,.tool-status,.sidebar-note){color:var(--theme-accent)}
+html[data-theme=dark] .tools-sidebar nav a:hover:not([aria-current]){background:#26392b;color:var(--theme-accent)}
+html[data-theme=dark] .tool-actions button{border-color:#50644f}
+html[data-theme=dark] .tool-editor input::file-selector-button{background:#26392b;border-color:#50644f;color:var(--ink)}
+html[data-theme=dark] .draft-label{background:#26392b;color:#d6e3cc}
+html[data-theme=dark] .qr-preview{background:#fff;color:#183e32}
+html[data-theme=dark] .qr-preview .tool-empty{color:#657069}
+/* Keep header controls usable on small screens. */
+@media(max-width:1200px) and (min-width:761px){.site-header .header-cta{display:none}}
+@media(max-width:520px){.portal-nav{gap:9px}.theme-toggle{width:32px;height:32px;flex-basis:32px;padding:6px}.portal-nav .theme-toggle{margin:0}.tool-page .portal-nav{gap:7px}}
+@media(max-width:360px){.portal-header{padding-inline:10px}.portal-brand strong{font-size:20px}.portal-brand svg{width:25px}.portal-nav{gap:7px}.portal-nav .nav-sign-in{gap:3px}.portal-language{gap:3px}}

@@ -1,0 +1,33 @@
+// Regenerate the static tool shells after changing the shared catalogue.
+const fs=require('node:fs');
+const path=require('node:path');
+global.window={};
+require('../tools-catalog.js');
+const root=path.resolve(__dirname,'..');
+const catalogue=window.ZPROP_TOOLS;
+const esc=s=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+fs.mkdirSync(path.join(root,'tools'),{recursive:true});
+for(const tool of catalogue){
+  const sidebar=catalogue.map(t=>`<a href="${t.id}.html" data-local data-tool-link="${t.id}" ${t.id===tool.id?'aria-current="page"':''}><span aria-hidden="true">${t.icon}</span><span data-tool-name="${t.id}">${t.name[0]}</span><span class="tool-nav-arrow" aria-hidden="true">↗</span></a>`).join('\n');
+  const page=`<!DOCTYPE html>
+<html lang="ms"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#183e32"><meta name="description" content="${esc(tool.description[0])}"><title>${tool.name[0]} — ZPROP</title><script src="../theme.js"></script><link rel="icon" href="../assets/favicon.svg"><link rel="stylesheet" href="../portal.css"><link rel="stylesheet" href="../tool-pages.css"><link rel="stylesheet" href="../theme.css"><script src="../public-origin.js" defer></script><script src="../tools-catalog.js" defer></script><script src="../portal.js" defer></script><script src="../auth.js" defer></script><script src="../tool-pages.js" defer></script></head>
+<body class="portal-page tool-page" data-tool="${tool.id}"><a class="portal-skip" href="#main" data-copy="skip">Langkau ke kandungan</a><div class="portal-shell">
+<header class="portal-header"><a class="portal-brand" href="../landing.html" data-local aria-label="ZPROP"><img class="portal-logo" src="../assets/zprop-tech-logo.png" alt="ZPROP TECH" width="48" height="48"><span><strong>ZPROP<span>.</span></strong><small data-copy="brandLine">Ruang baharu. Cerita baharu.</small></span></a><nav class="portal-nav" aria-label="Portal"><a href="../landing.html" data-local class="back-portal"><span aria-hidden="true">←</span><span data-copy="backPortal">Kembali ke portal</span></a><div class="portal-language" role="group" aria-label="Bahasa / Language"><button data-language="ms" aria-pressed="true">BM</button><span>/</span><button data-language="en" aria-pressed="false">EN</button></div><a href="../sign-in.html" data-local class="nav-sign-in"><span aria-hidden="true">⇥</span><span data-copy="signIn">Log masuk</span></a></nav></header>
+<div class="tools-layout"><aside class="tools-sidebar"><span class="section-kicker" data-tool-copy="suite">ALATAN ZPROP</span><nav aria-label="ZPROP tools">${sidebar}</nav><div class="sidebar-note"><span aria-hidden="true">⌂</span><p data-tool-copy="sidebarNote">Identiti sendiri.<br>Ruang milik anda.</p></div></aside>
+<main id="main" class="tool-main"><div class="tool-breadcrumb"><a href="../landing.html" data-local>Portal</a><span aria-hidden="true">/</span><span data-tool-name="${tool.id}">${tool.name[0]}</span></div><div class="tool-heading"><span class="tool-heading-icon" aria-hidden="true">${tool.icon}</span><span class="section-kicker" id="tool-tag">${tool.tag[0]}</span><h1 id="tool-title">${tool.title[0]}</h1><p id="tool-description">${tool.description[0]}</p></div><div class="tool-capabilities" id="tool-capabilities">${tool.features.map(f=>`<span>✓ ${f[0]}</span>`).join('')}</div>
+<div class="tool-workspace" id="tool-workspace"></div><p class="tool-availability" id="tool-availability">${tool.availability[0]}</p><noscript><p>Aktifkan JavaScript untuk menggunakan alatan ini. / Enable JavaScript to use this tool.</p></noscript>
+<div class="tool-bottom"><a href="../landing.html" data-local><span aria-hidden="true">←</span> <span data-tool-copy="allTools">Semua alatan</span></a><a href="../index.html#contact" data-local><span data-tool-copy="help">Perlukan bantuan?</span> ↗</a></div></main></div>
+<footer class="portal-footer"><span>© <span data-year>2026</span> ZPROP. <span data-copy="rights">Hak cipta terpelihara.</span></span><a href="../index.html" data-local><span data-copy="backWebsite">Ke laman web ZPROP</span> ↗</a><span data-copy="footerLine">Identiti ZPROP. Ruang milik anda.</span></footer></div></body></html>`;
+  let output=page.replaceAll('../index.html#contact','../landing.html#how-it-works');
+  if(tool.id==='host-html') output=output.replace('../tool-pages.js','../static-site.js').replace('</head>','<link rel="stylesheet" href="../static-site.css"></head>');
+  if(tool.id==='bio-pages') output=output.replace('<script src="../tool-pages.js" defer></script>','<script src="../bio-model.js" defer></script><script src="../bio-library.js" defer></script><script src="../bio-drag.js" defer></script><script src="../bio-page.js" defer></script>').replace('</head>','<link rel="stylesheet" href="../bio-page.css"></head>');
+  // Finish translating and mounting the editor before the incoming page is
+  // captured for a transition. Ordinary links and browser history stay native.
+  const pageScripts = [];
+  output = output.replace(/<script src="[^"]+" defer><\/script>/g, script => { pageScripts.push(script.replace(' defer', '')); return ''; });
+  output = output.replace('</head>', '<link rel="stylesheet" href="../tool-navigation.css"><link rel="expect" blocking="render" href="#tool-page-ready"></head>');
+  output = output.replace('</body>', pageScripts.join('') + '<div id="tool-page-ready" aria-hidden="true"></div></body>');
+  fs.writeFileSync(path.join(root,'tools',tool.id+'.html'),output);
+}
+require('./build-dashboard.cjs');
+console.log(`Generated ${catalogue.length} ZPROP tool pages and landing links.`);
