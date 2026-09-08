@@ -23,6 +23,8 @@
   });
   copy.profileHelp = ['Tambah foto, nama dan pengenalan anda.', 'Add your photo, name and introduction.'];
   Object.assign(copy,{blockStatus:['Status blok','Block status'],enabled:['Aktif','On'],disabled:['Tidak aktif','Off'],statusHelp:['Simpan perubahan untuk mengemas kini status pada halaman langsung.','Save changes to update the status on your live page.']});
+  Object.assign(copy,{minimize:['Minimumkan blok','Minimize block'],expand:['Kembangkan blok','Expand block']});
+  const minimized = new Set();
   const t = key => copy[key]?.[language] || key;
   const label = key => `<span data-bio-copy="${key}">${t(key)}</span>`;
   function shell() {
@@ -59,8 +61,20 @@
   function status(key, error = false) { statusKey = key; $('#tool-status').textContent = key ? t(key) : ''; $('#tool-status').classList.toggle('is-error', error); }
   function changed() { library.changed(); status(''); renderPreview(); }
   function validUrl(value) { try { const url = new URL(value); return ['http:','https:'].includes(url.protocol) && !!url.hostname && !url.username && !url.password; } catch { return false; } }
+  function setMinimized(id, collapse) {
+    if(collapse)minimized.add(id);else minimized.delete(id);
+    const card = $('[data-block-id="'+id+'"]');
+    if(!card)return;
+    card.classList.toggle('is-minimized',collapse);
+    card.querySelector('.bio-block-fields').hidden=collapse;
+    const button=card.querySelector('[data-block-action=minimize]');
+    button.setAttribute('aria-expanded',String(!collapse));
+    button.setAttribute('aria-label',t(collapse?'expand':'minimize'));
+    button.title=t(collapse?'expand':'minimize');
+    button.textContent=collapse?'+':'−';
+  }
   function controls(block, index) {
-    return `<div class="bio-block-controls"><button type="button" class="bio-status-toggle" data-block-action="toggle" role="switch" aria-checked="${block.enabled!==false}" aria-label="${t('blockStatus')}: ${t(block.type)} ${index+1}" title="${t('statusHelp')}"><span class="bio-switch-track" aria-hidden="true"></span><span>${t(block.enabled===false?'disabled':'enabled')}</span></button>${[['duplicate','⧉'],['remove','×']].map(([action,icon]) => `<button type="button" data-block-action="${action}" aria-label="${t(action)}" title="${t(action)}">${icon}</button>`).join('')}</div>`;
+    return `<div class="bio-block-controls"><button type="button" data-block-action="minimize" aria-expanded="${!minimized.has(block.id)}" aria-controls="bio-block-fields-${block.id}" aria-label="${t(minimized.has(block.id)?'expand':'minimize')}" title="${t(minimized.has(block.id)?'expand':'minimize')}">${minimized.has(block.id)?'+':'−'}</button><button type="button" class="bio-status-toggle" data-block-action="toggle" role="switch" aria-checked="${block.enabled!==false}" aria-label="${t('blockStatus')}: ${t(block.type)} ${index+1}" title="${t('statusHelp')}"><span class="bio-switch-track" aria-hidden="true"></span><span>${t(block.enabled===false?'disabled':'enabled')}</span></button>${[['duplicate','⧉'],['remove','×']].map(([action,icon]) => `<button type="button" data-block-action="${action}" aria-label="${t(action)}" title="${t(action)}">${icon}</button>`).join('')}</div>`;
   }
   function renderBlocks() {
     $('#bio-blocks').innerHTML = state.blocks.length ? state.blocks.map((block,index) => {
@@ -71,9 +85,12 @@
       if (['text','heading'].includes(block.type)) fields = block.type === 'text' ? `<label>${label('text')}<textarea data-key="text" maxlength="3000" required>${esc(block.text || '')}</textarea></label>` : input('heading','maxlength="200" required');
       if (block.type === 'image') fields = `<label>${label('imageFile')}<input type="file" data-key="image" accept="image/png,image/jpeg,image/webp,image/gif"></label><p class="bio-hint">${label('imageHelp')}</p><img class="bio-image-thumb" ${block.src ? `src="${block.src}"` : 'hidden'} alt="">` + input('alt','maxlength="200"') + input('caption','maxlength="300"');
       if (block.type === 'divider') fields = `<p class="bio-hint">${label('dividerNote')}</p>`;
-      return `<article class="bio-block" data-block-id="${block.id}" data-block-type="${block.type}"><div class="bio-block-top"><button type="button" class="bio-drag-handle" aria-label="${t('drag')}" title="${t('drag')}">⠿</button><span class="bio-block-number">${String(index+1).padStart(2,'0')}</span><h4>${icons[block.type]} ${t(block.type)}</h4>${controls(block,index)}</div><div class="bio-block-fields">${fields}</div></article>`;
+      return `<article class="bio-block" data-block-id="${block.id}" data-block-type="${block.type}"><div class="bio-block-top"><button type="button" class="bio-drag-handle" aria-label="${t('drag')}" title="${t('drag')}">⠿</button><span class="bio-block-number">${String(index+1).padStart(2,'0')}</span><h4>${icons[block.type]} ${t(block.type)}</h4>${controls(block,index)}</div><div class="bio-block-fields" id="bio-block-fields-${block.id}" ${minimized.has(block.id)?'hidden':''}>${fields}</div></article>`;
     }).join('') : `<p class="bio-empty">${t('noBlocks')}</p>`;
-    for (const block of state.blocks) $(`[data-block-id="${block.id}"]`).classList.toggle('is-off',block.enabled===false);
+    for (const block of state.blocks) {
+      $(`[data-block-id="${block.id}"]`).classList.toggle('is-off',block.enabled===false);
+      setMinimized(block.id,minimized.has(block.id));
+    }
     renderProfileThumbs();
   }
   // This same markup is used for the preview, HTML download and published page.
@@ -125,13 +142,14 @@
   $('#bio-blocks').addEventListener('click', event => {
     const button = event.target.closest('[data-block-action]'); if (!button || publishing) return;
     const id = Number(button.closest('[data-block-id]').dataset.blockId), index = state.blocks.findIndex(block => block.id === id), action = button.dataset.blockAction;
+    if (action === 'minimize') { setMinimized(id,!minimized.has(id)); return; }
     let focusId = id;
     if (action === 'toggle') {
       state.blocks[index].enabled = state.blocks[index].enabled === false;
       renderBlocks(); changed(); $(`[data-block-id="${id}"] [data-block-action=toggle]`).focus(); return;
     }
     if (action === 'removePhoto') state.blocks[index].photo = '';
-    if (action === 'remove') { state.blocks.splice(index,1); focusId = state.blocks[Math.min(index,state.blocks.length-1)]?.id; }
+    if (action === 'remove') { minimized.delete(id); state.blocks.splice(index,1); focusId = state.blocks[Math.min(index,state.blocks.length-1)]?.id; }
     if (action === 'duplicate') { if (state.blocks.length >= 30) return status('blockLimit',true); const block = {...state.blocks[index],id:nextId++}; state.blocks.splice(index+1,0,block); focusId=block.id; }
     renderBlocks(); changed(); (focusId ? $(`[data-block-id="${focusId}"] .bio-drag-handle`) : $('#add-block')).focus();
   });
@@ -174,9 +192,10 @@
     for (const input of form.querySelectorAll('input,textarea,select')) {
       const blockId = input.closest('[data-block-id]')?.dataset.blockId;
       if (blockId && state.blocks.find(block => block.id === Number(blockId))?.enabled === false) continue;
-      if (!input.checkValidity()) { tab('content'); input.reportValidity(); return false; }
+      if (!input.checkValidity()) { tab('content'); if(blockId)setMinimized(Number(blockId),false); input.reportValidity(); return false; }
     }
-    if (state.blocks.some(block => block.enabled !== false && block.type === 'image' && !block.src)) { tab('content'); status('imageMissing',true); return false; }
+    const missingImage=state.blocks.find(block => block.enabled !== false && block.type === 'image' && !block.src);
+    if (missingImage) { tab('content'); setMinimized(missingImage.id,false); $('[data-block-id="'+missingImage.id+'"] input[type=file]').focus(); status('imageMissing',true); return false; }
     if (state.blocks.reduce((sum,block)=>sum+imageBytes(block.type === 'profile' ? block.photo : block.src),0)>20*1024*1024) { status('imageTotal',true); return false; }
     return true;
   }
@@ -207,6 +226,7 @@
     if (publishing) $('#publish-bio').firstElementChild.textContent=t('publishing'); else publishLabel();
   });
   const library=window.ZpropBioLibrary.mount({base,publishBase,t,label,esc,initialState:structuredClone(state),onSelect(record){
+    minimized.clear();
     Object.assign(state,window.ZpropBioModel.upgrade(record.state));nextId=Math.max(0,...state.blocks.map(block=>block.id))+1;
     for(const key of ['background','ink','accent','buttonText','shape'])form.elements[key].value=state[key];
     form.elements.slug.value=record.slug;form.querySelectorAll('input,textarea').forEach(input=>input.setCustomValidity(''));
