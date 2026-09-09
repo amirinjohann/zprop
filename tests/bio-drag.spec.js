@@ -1,9 +1,10 @@
 ﻿const {test,expect}=require('./auth-fixture');
-const {createBio}=require('./bio-helper');
+const {createBio,expandBlocks,addBlock}=require('./bio-helper');
 async function setup(page) {
   await createBio(page);
+  await expandBlocks(page);
   while(await page.locator('.bio-block').count())await page.locator('[data-block-action=remove]').first().click();
-  for(let i=0;i<3;i++){await page.locator('#add-block').click();await page.locator('[data-add=heading]').click();await page.locator('[data-key=heading]').last().fill('Block '+i);}
+  for(let i=0;i<3;i++){await addBlock(page,'heading',{heading:'Block '+i});await expandBlocks(page);}
   await page.locator('.bio-block').nth(1).scrollIntoViewIfNeeded();
 }
 async function pointer(page,context,mobile) {
@@ -60,7 +61,7 @@ test('cancel restores the original order and reduced motion disables swap animat
 
 test('dragging near the screen edges scrolls the editor in both directions',async({page,context},info)=>{
   await setup(page);
-  for(let i=3;i<8;i++){await page.locator('#add-block').click();await page.locator('[data-add=heading]').click();await page.locator('[data-key=heading]').last().fill('Block '+i);}
+  for(let i=3;i<8;i++){await addBlock(page,'heading',{heading:'Block '+i});await expandBlocks(page);}
   await page.locator('.bio-drag-handle').first().scrollIntoViewIfNeeded();
   const box=await page.locator('.bio-drag-handle').first().boundingBox();
   const start={x:box.x+box.width/2,y:box.y+box.height/2};

@@ -1,12 +1,13 @@
 ﻿const {test,expect}=require('./auth-fixture');
-const {createBio}=require('./bio-helper');
+const {createBio,expandBlocks,addBlock}=require('./bio-helper');
 const fs=require('node:fs/promises');
 test('each block status survives saving and controls preview, exports and publishing',async({page,request},info)=>{
   const slug=await createBio(page);
+  await expandBlocks(page);
   await page.locator('[data-key=name]').fill('Hidden profile name');
   await page.locator('[data-key=bio]').fill('Hidden biography');
   for(const type of ['heading','text','image','divider']){
-    await page.locator('#add-block').click();await page.locator('[data-add='+type+']').click();
+    await addBlock(page,type);
   }
   await expect(page.getByRole('switch')).toHaveCount(6);
   for(const toggle of await page.getByRole('switch').all()){
@@ -33,7 +34,7 @@ test('each block status survives saving and controls preview, exports and publis
   await page.reload();await expect(profile.getByRole('switch')).toBeChecked();
   await page.locator('[data-language=ms]').click();await expect(profile.getByRole('switch')).toContainText('Aktif');
   await page.locator('[data-language=en]').click();await expect(profile.getByRole('switch')).toContainText('On');
-  await page.locator('#publish-bio').click();await expect(page.locator('#bio-dirty')).toBeHidden();
+  await page.locator('#publish-bio').click();await expect(page.locator('#tool-status')).toHaveText('Your bio page is published');
   expect(await (await request.get('/sites/'+slug+'/')).text()).toContain('Hidden profile name');
   const link=page.locator('[data-block-type=link]');await link.getByRole('switch').click();
   await page.locator('#publish-bio').click();expect(await page.locator('[data-key=url]').evaluate(el=>el.validity.valid)).toBe(false);
@@ -52,6 +53,7 @@ test('each block status survives saving and controls preview, exports and publis
 });
 test('block status accepts only booleans and older blocks remain enabled',async({page,request})=>{
   const slug=await createBio(page);
+  await expandBlocks(page);
   const record=await (await request.get('/api/bio-pages/'+slug)).json();
   await expect(page.getByRole('switch').first()).toBeChecked();
   record.state.blocks[0].enabled='false';

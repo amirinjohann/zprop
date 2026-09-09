@@ -25,6 +25,51 @@
   Object.assign(copy,{blockStatus:['Status blok','Block status'],enabled:['Aktif','On'],disabled:['Tidak aktif','Off'],statusHelp:['Simpan perubahan untuk mengemas kini status pada halaman langsung.','Save changes to update the status on your live page.']});
   Object.assign(copy,{minimize:['Minimumkan blok','Minimize block'],expand:['Kembangkan blok','Expand block']});
   const minimized = new Set();
+  Object.assign(copy, {
+    templates:['Templat permulaan','Starter templates'], templatesHelp:['Pilih gaya sebagai permulaan, kemudian sesuaikan warna anda. Kandungan anda dikekalkan.','Start with a look, then customize your colors. Your content stays in place.'],
+    botanical:['Botani','Botanical'], studio:['Studio','Studio'], midnight:['Tengah malam','Midnight'], rose:['Mawar','Rose'], ocean:['Lautan','Ocean'], sunset:['Senja','Sunset'],
+    blockDetails:['Butiran blok','Block details'], detailsHelp:['Isi maklumat penting dahulu. Anda boleh menambah butiran lain selepas ini.','Fill in the essentials first. You can add other details later.'], back:['Kembali','Back'], requiredContent:['Isi ruangan ini.','Please fill in this field.']
+  });
+  Object.assign(copy, {
+    social:['Media sosial','Social links'], socialHelp:['Tiga pautan bulat ke profil sosial anda.','Three circular links to your social profiles.'], socialNote:['Dipaparkan di bawah kandungan halaman. Isi pautan pertama; dua lagi adalah pilihan.','Shown below your page content. Add your first link; the other two are optional.'], socialSlot:['Pautan sosial','Social link'], platform:['Platform','Platform'], socialUrl:['URL profil','Profile URL'], optional:['pilihan','optional'], addSocial:['Tambah pautan sosial','Add social links'], editSocial:['Edit pautan sosial','Edit social links']
+  });
+  const socialPlatforms = window.ZpropBioModel.socialPlatforms;
+  const socialDefaults = ['instagram','facebook','tiktok'];
+  const socialPaths = {
+    instagram:'<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".8" fill="currentColor" stroke="none"/>',
+    facebook:'<path d="M14 21v-8h3l.5-4H14V7c0-1.2.5-2 2-2h2V2h-3c-3 0-5 2-5 5v2H7v4h3v8"/>',
+    tiktok:'<path d="M14 3v12a4 4 0 1 1-4-4M14 3c0 4 3 6 6 6"/>',
+    x:'<path d="m4 3 16 18h-4L3 3h4l14 18M20 3 4 21"/>',
+    linkedin:'<path d="M4 9v12M9 21V9h4v2c1-3 7-3 7 2v8M13 21v-7"/><circle cx="4" cy="4" r="1"/>',
+    youtube:'<rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3Z"/>'
+  };
+  const socialIcon = platform => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(socialPaths[platform] || socialPaths.instagram)+'</svg>';
+  function socialFields(block = {}, editing = false) {
+    return '<p class="bio-hint">'+label('socialNote')+'</p>'+[1,2,3].map(slot => {
+      const platform = block['platform'+slot] || socialDefaults[slot-1];
+      const attr = key => editing ? 'data-key="'+key+'"' : 'name="'+key+'"';
+      return `<fieldset class="bio-social-slot"><legend>${t('socialSlot')} ${slot}${slot>1?' ('+t('optional')+')':''}</legend><label>${label('platform')}<select ${attr('platform'+slot)}>${Object.entries(socialPlatforms).map(([value,name]) => `<option value="${value}" ${value===platform?'selected':''}>${name}</option>`).join('')}</select></label><label>${label('socialUrl')}<input ${attr('url'+slot)} type="url" value="${esc(block['url'+slot] || '')}" placeholder="https://" maxlength="4096" ${slot===1?'required':''}></label></fieldset>`;
+    }).join('');
+  }
+  function socialMarkup(preview = false) {
+    const block = state.blocks.find(item => item.type === 'social');
+    if (block?.enabled === false || (!block && !preview)) return '';
+    const links = [1,2,3].map(slot => {
+      const platform = block?.['platform'+slot] || socialDefaults[slot-1], url = block?.['url'+slot];
+      if (validUrl(url)) return `<a class="bio-social-circle" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="${esc(socialPlatforms[platform])}" title="${esc(socialPlatforms[platform])}">${socialIcon(platform)}</a>`;
+      return preview ? `<button type="button" class="bio-social-circle bio-social-empty" data-setup-social="${slot}" aria-label="${t(block?'editSocial':'addSocial')}: ${socialPlatforms[platform]}" title="${t(block?'editSocial':'addSocial')}">${socialIcon(platform)}</button>` : '';
+    }).join('');
+    return links ? `<nav class="bio-page-social" aria-label="${t('social')}">${links}</nav>` : '';
+  }
+  const appearanceKeys = ['background','ink','accent','buttonText','shape'];
+  const templates = [
+    {id:'botanical',background:'#f6f5ef',ink:'#203e33',accent:'#203e33',buttonText:'#ffffff',shape:'rounded'},
+    {id:'studio',background:'#ffffff',ink:'#202020',accent:'#202020',buttonText:'#ffffff',shape:'square'},
+    {id:'midnight',background:'#141b2d',ink:'#f0f2ff',accent:'#bfcaff',buttonText:'#141b2d',shape:'rounded'},
+    {id:'rose',background:'#fff1f2',ink:'#652d42',accent:'#9d3e60',buttonText:'#ffffff',shape:'pill'},
+    {id:'ocean',background:'#edf8fb',ink:'#174459',accent:'#21647d',buttonText:'#ffffff',shape:'pill'},
+    {id:'sunset',background:'#fff3e5',ink:'#653725',accent:'#a64728',buttonText:'#ffffff',shape:'rounded'}
+  ];
   const t = key => copy[key]?.[language] || key;
   const label = key => `<span data-bio-copy="${key}">${t(key)}</span>`;
   function shell() {
@@ -42,17 +87,17 @@
   document.removeEventListener('zprop:language', shell);
   let nextId = 1, statusKey = '', publishing = false, loading = 0, publishedUrl = '';
   const state = { schemaVersion:2, background:'#f6f5ef', ink:'#203e33', accent:'#203e33', buttonText:'#ffffff', shape:'rounded', blocks:[{id:nextId++,type:'profile',name:'ZPROP',bio:language ? 'Your story. Your space.' : 'Cerita anda. Ruang anda.',photo:''},{id:nextId++, type:'link', label:language ? 'Visit my website' : 'Lawati laman web saya', url:window.ZPROP_PUBLIC_ORIGIN}] };
-  const blockTypes = ['profile','link','text','heading','image','divider'];
-  const icons = {profile:'♙', link:'↗', text:'¶', heading:'T', image:'▧', divider:'—'};
+  const blockTypes = ['profile','link','text','heading','image','divider','social'];
+  const icons = {profile:'♙', link:'↗', text:'¶', heading:'T', image:'▧', divider:'—', social:'@'};
   const field = (key, value, attrs = '') => `<label>${label(key)}<input name="${key}" value="${esc(value)}" ${attrs}></label>`;
   $('#tool-workspace').innerHTML = `<div class="bio-builder"><form id="tool-form" class="tool-editor" novalidate><fieldset id="bio-fields"><h2 class="workspace-title">${label('editor')}</h2>
     <div class="bio-tabs" role="tablist" aria-label="Bio editor"><button type="button" role="tab" id="bio-content-tab" aria-controls="bio-content" aria-selected="true" data-tab="content">${label('content')}</button><button type="button" role="tab" id="bio-appearance-tab" aria-controls="bio-appearance" aria-selected="false" tabindex="-1" data-tab="appearance">${label('appearance')}</button></div>
     <section id="bio-content" role="tabpanel" aria-labelledby="bio-content-tab">
     <div class="bio-block-heading"><div><h3>${label('blocks')}</h3><p class="bio-hint">${label('blocksHelp')}</p></div><button type="button" id="add-block" class="bio-add">+ ${label('add')}</button></div><div id="bio-blocks"></div></section>
-    <section id="bio-appearance" role="tabpanel" aria-labelledby="bio-appearance-tab" hidden><h3>${label('styleTitle')}</h3><p class="bio-hint">${label('styleHelp')}</p><div class="bio-colors">${['background','ink','accent','buttonText'].map(key => field(key,state[key],'type="color"')).join('')}</div><label>${label('buttonStyle')}<select name="shape">${['rounded','square','pill'].map(key => `<option value="${key}" data-bio-copy="${key}">${t(key)}</option>`).join('')}</select></label></section>
+    <section id="bio-appearance" role="tabpanel" aria-labelledby="bio-appearance-tab" hidden><h3>${label('styleTitle')}</h3><p class="bio-hint">${label('styleHelp')}</p><section class="bio-templates" aria-labelledby="bio-templates-title"><h4 id="bio-templates-title">${label('templates')}</h4><p class="bio-hint">${label('templatesHelp')}</p><div id="bio-template-grid" class="bio-template-grid"></div></section><div class="bio-colors">${['background','ink','accent','buttonText'].map(key => field(key,state[key],'type="color"')).join('')}</div><label>${label('buttonStyle')}<select name="shape">${['rounded','square','pill'].map(key => `<option value="${key}" data-bio-copy="${key}">${t(key)}</option>`).join('')}</select></label></section>
     <div class="bio-publish"><label>${label('slug')}<div class="bio-address"><span>zprop.tech/sites/</span><input name="slug" maxlength="50" pattern="[a-z0-9][a-z0-9-]{1,48}[a-z0-9]" placeholder="my-bio" aria-describedby="bio-slug-help"></div></label><p class="bio-hint" id="bio-slug-help">${label('slugHelp')}</p><div class="tool-actions"><button type="button" data-action="downloadHtml">${label('downloadHtml')}</button><button type="submit" class="primary" id="publish-bio">${label('publish')} ↗</button></div></div></fieldset><p id="tool-status" class="tool-status" role="status" aria-live="polite"></p><section id="bio-result" class="bio-result" hidden><h3>${label('ready')}</h3><a id="bio-url" target="_blank" rel="noopener noreferrer"></a><div class="tool-actions"><a id="open-bio" target="_blank" rel="noopener noreferrer">${label('open')} ↗</a><button type="button" id="copy-bio">${label('copy')}</button></div></section></form>
     <aside class="bio-preview-column"><div class="bio-preview-heading"><span class="bio-live-dot"></span><h2>${label('preview')}</h2><span aria-hidden="true">↗</span></div><div class="bio-phone"><div class="bio-phone-camera" aria-hidden="true"></div><div class="bio-phone-screen"><main id="bio-preview" class="bio-document"></main></div></div><p class="bio-hint bio-preview-hint">${label('previewHint')}</p></aside></div>
-    <dialog id="block-picker" class="bio-dialog" aria-labelledby="block-picker-title"><div class="bio-dialog-heading"><h2 id="block-picker-title">${label('choose')}</h2><button type="button" id="close-block-picker">×</button></div><div class="bio-block-types">${blockTypes.map(type => `<button type="button" data-add="${type}"><span class="bio-type-icon" aria-hidden="true">${icons[type]}</span><span><strong>${label(type)}</strong><small>${label(type === 'image' ? 'imageBlockHelp' : type + 'Help')}</small></span><span aria-hidden="true">+</span></button>`).join('')}</div></dialog>`;
+    <dialog id="block-picker" class="bio-dialog" aria-labelledby="block-picker-title"><div class="bio-dialog-heading"><h2 id="block-picker-title">${label('choose')}</h2><button type="button" id="close-block-picker">×</button></div><div class="bio-block-types">${blockTypes.map(type => `<button type="button" data-add="${type}"><span class="bio-type-icon" aria-hidden="true">${icons[type]}</span><span><strong>${label(type)}</strong><small>${label(type === 'image' ? 'imageBlockHelp' : type + 'Help')}</small></span><span aria-hidden="true">+</span></button>`).join('')}</div><form id="block-details-form" hidden novalidate><button type="button" id="back-block-picker" class="bio-text-button">${label('back')}</button><h3 id="block-details-type"></h3><p class="bio-hint">${label('detailsHelp')}</p><fieldset id="block-details-fields"></fieldset><p id="block-details-status" class="tool-status" role="status"></p><button type="submit" id="confirm-add-block" class="bio-add bio-full-button">${label('add')}</button></form></dialog>`;
   const form = $('#tool-form');
   form.elements.slug.required=true;
   $('[data-action=downloadHtml]').insertAdjacentHTML('afterend',`<button type="button" id="save-bio-draft">${label('saveDraft')}</button>`);
@@ -74,7 +119,7 @@
     button.textContent=collapse?'+':'−';
   }
   function controls(block, index) {
-    return `<div class="bio-block-controls"><button type="button" data-block-action="minimize" aria-expanded="${!minimized.has(block.id)}" aria-controls="bio-block-fields-${block.id}" aria-label="${t(minimized.has(block.id)?'expand':'minimize')}" title="${t(minimized.has(block.id)?'expand':'minimize')}">${minimized.has(block.id)?'+':'−'}</button><button type="button" class="bio-status-toggle" data-block-action="toggle" role="switch" aria-checked="${block.enabled!==false}" aria-label="${t('blockStatus')}: ${t(block.type)} ${index+1}" title="${t('statusHelp')}"><span class="bio-switch-track" aria-hidden="true"></span><span>${t(block.enabled===false?'disabled':'enabled')}</span></button>${[['duplicate','⧉'],['remove','×']].map(([action,icon]) => `<button type="button" data-block-action="${action}" aria-label="${t(action)}" title="${t(action)}">${icon}</button>`).join('')}</div>`;
+    return `<div class="bio-block-controls"><button type="button" data-block-action="minimize" aria-expanded="${!minimized.has(block.id)}" aria-controls="bio-block-fields-${block.id}" aria-label="${t(minimized.has(block.id)?'expand':'minimize')}" title="${t(minimized.has(block.id)?'expand':'minimize')}">${minimized.has(block.id)?'+':'−'}</button><button type="button" class="bio-status-toggle" data-block-action="toggle" role="switch" aria-checked="${block.enabled!==false}" aria-label="${t('blockStatus')}: ${t(block.type)} ${index+1}" title="${t('statusHelp')}"><span class="bio-switch-track" aria-hidden="true"></span><span>${t(block.enabled===false?'disabled':'enabled')}</span></button>${[['duplicate','⧉'],['remove','×']].map(([action,icon]) => `<button type="button" data-block-action="${action}" ${action==='duplicate' && block.type==='social'?'disabled':''} aria-label="${t(action)}" title="${t(action)}">${icon}</button>`).join('')}</div>`;
   }
   function renderBlocks() {
     $('#bio-blocks').innerHTML = state.blocks.length ? state.blocks.map((block,index) => {
@@ -84,6 +129,7 @@
       if (block.type === 'link') fields = input('label','maxlength="100" required') + input('url','type="url" placeholder="https://" maxlength="4096" required');
       if (['text','heading'].includes(block.type)) fields = block.type === 'text' ? `<label>${label('text')}<textarea data-key="text" maxlength="3000" required>${esc(block.text || '')}</textarea></label>` : input('heading','maxlength="200" required');
       if (block.type === 'image') fields = `<label>${label('imageFile')}<input type="file" data-key="image" accept="image/png,image/jpeg,image/webp,image/gif"></label><p class="bio-hint">${label('imageHelp')}</p><img class="bio-image-thumb" ${block.src ? `src="${block.src}"` : 'hidden'} alt="">` + input('alt','maxlength="200"') + input('caption','maxlength="300"');
+      if (block.type === 'social') fields = socialFields(block,true);
       if (block.type === 'divider') fields = `<p class="bio-hint">${label('dividerNote')}</p>`;
       return `<article class="bio-block" data-block-id="${block.id}" data-block-type="${block.type}"><div class="bio-block-top"><button type="button" class="bio-drag-handle" aria-label="${t('drag')}" title="${t('drag')}">⠿</button><span class="bio-block-number">${String(index+1).padStart(2,'0')}</span><h4>${icons[block.type]} ${t(block.type)}</h4>${controls(block,index)}</div><div class="bio-block-fields" id="bio-block-fields-${block.id}" ${minimized.has(block.id)?'hidden':''}>${fields}</div></article>`;
     }).join('') : `<p class="bio-empty">${t('noBlocks')}</p>`;
@@ -94,7 +140,7 @@
     renderProfileThumbs();
   }
   // This same markup is used for the preview, HTML download and published page.
-  function markup() {
+  function markup(preview = false) {
     return `<div class="bio-page-blocks">${state.blocks.map(block => {
       if (block.enabled === false) return '';
       if (block.type === 'profile') return `<header class="bio-page-profile">${block.photo ? `<img class="bio-avatar-image" src="${block.photo}" alt="${esc(block.name || '')}">` : `<div class="bio-avatar-letter">${esc((block.name || '').trim().slice(0,1) || 'Z')}</div>`}<h3>${esc(block.name || t('emptyName'))}</h3><p>${esc(block.bio || '')}</p></header>`;
@@ -104,14 +150,24 @@
       if (block.type === 'divider') return '<hr class="bio-page-divider">';
       if (block.type === 'image') return `<figure class="bio-page-image">${block.src ? `<img src="${block.src}" alt="${esc(block.alt || '')}">` : `<div class="bio-image-placeholder">▧<span>${t('previewImage')}</span></div>`}${block.caption?`<figcaption>${esc(block.caption)}</figcaption>`:''}</figure>`;
       return '';
-    }).join('')}</div><footer class="bio-page-footer">Made with <a href="${window.ZPROP_PUBLIC_ORIGIN}" target="_blank" rel="noopener noreferrer">ZPROP.</a></footer>`;
+    }).join('')}</div>${socialMarkup(preview)}<footer class="bio-page-footer">Made with <a href="${window.ZPROP_PUBLIC_ORIGIN}" target="_blank" rel="noopener noreferrer">ZPROP.</a></footer>`;
   }
-  const pageStyles = `.bio-document{box-sizing:border-box;background:var(--bio-bg);color:var(--bio-ink);font-family:Arial,sans-serif;font-size:14px;line-height:1.6;padding:40px 24px 24px;overflow-wrap:anywhere;min-height:100%}.bio-document *{box-sizing:border-box}.bio-document h2,.bio-document h3,.bio-document p,.bio-document figure{margin:0}.bio-page-profile{text-align:center;padding:8px 0}.bio-avatar-image,.bio-avatar-letter{display:block;width:88px;height:88px;border-radius:50%;margin:0 auto 17px;object-fit:cover}.bio-avatar-letter{display:grid;place-items:center;background:var(--bio-accent);color:var(--bio-button-text);font-size:34px}.bio-document .bio-page-profile h3{font-size:25px;font-weight:700;line-height:1.25;margin-bottom:10px;color:inherit}.bio-page-profile p{white-space:pre-wrap;font-size:13px;opacity:.85}.bio-page-blocks{display:flex;flex-direction:column;gap:16px}.bio-document .bio-page-link{display:flex;align-items:center;justify-content:center;gap:12px;position:relative;background:var(--bio-accent);color:var(--bio-button-text);border-radius:var(--bio-radius);padding:15px 32px;text-decoration:none;min-height:50px;font-weight:600;font-size:13px}.bio-page-link>span{position:absolute;right:14px}.bio-page-heading{font-size:20px;font-weight:700;text-align:center;line-height:1.4}.bio-page-text{white-space:pre-wrap;text-align:center}.bio-page-divider{width:100%;border:0;border-top:1px solid currentColor;opacity:.22;margin:6px 0}.bio-page-image img{display:block;max-width:100%;width:100%;height:auto;border-radius:12px}.bio-page-image figcaption{font-size:12px;text-align:center;margin-top:8px;white-space:pre-wrap}.bio-image-placeholder{display:grid;place-content:center;min-height:150px;border:1px dashed currentColor;border-radius:12px;text-align:center;font-size:32px;opacity:.65}.bio-image-placeholder span{font-size:12px}.bio-page-footer{text-align:center;font-size:10px;margin-top:34px;opacity:.65}.bio-page-footer a{color:inherit;font-weight:700;text-decoration:none}`;
+  const pageStyles = `.bio-document{box-sizing:border-box;background:var(--bio-bg);color:var(--bio-ink);font-family:Arial,sans-serif;font-size:14px;line-height:1.6;padding:40px 24px 24px;overflow-wrap:anywhere;min-height:100%}.bio-document *{box-sizing:border-box}.bio-document h2,.bio-document h3,.bio-document p,.bio-document figure{margin:0}.bio-page-profile{text-align:center;padding:8px 0}.bio-avatar-image,.bio-avatar-letter{display:block;width:88px;height:88px;border-radius:50%;margin:0 auto 17px;object-fit:cover}.bio-avatar-letter{display:grid;place-items:center;background:var(--bio-accent);color:var(--bio-button-text);font-size:34px}.bio-document .bio-page-profile h3{font-size:25px;font-weight:700;line-height:1.25;margin-bottom:10px;color:inherit}.bio-page-profile p{white-space:pre-wrap;font-size:13px;opacity:.85}.bio-page-blocks{display:flex;flex-direction:column;gap:16px}.bio-document .bio-page-link{display:flex;align-items:center;justify-content:center;gap:12px;position:relative;background:var(--bio-accent);color:var(--bio-button-text);border-radius:var(--bio-radius);padding:15px 32px;text-decoration:none;min-height:50px;font-weight:600;font-size:13px}.bio-page-link>span{position:absolute;right:14px}.bio-page-heading{font-size:20px;font-weight:700;text-align:center;line-height:1.4}.bio-page-text{white-space:pre-wrap;text-align:center}.bio-page-divider{width:100%;border:0;border-top:1px solid currentColor;opacity:.22;margin:6px 0}.bio-page-image img{display:block;max-width:100%;width:100%;height:auto;border-radius:12px}.bio-page-image figcaption{font-size:12px;text-align:center;margin-top:8px;white-space:pre-wrap}.bio-image-placeholder{display:grid;place-content:center;min-height:150px;border:1px dashed currentColor;border-radius:12px;text-align:center;font-size:32px;opacity:.65}.bio-image-placeholder span{font-size:12px}.bio-page-footer{text-align:center;font-size:10px;margin-top:34px;opacity:.65}.bio-page-footer a{color:inherit;font-weight:700;text-decoration:none}.bio-page-social{display:flex;justify-content:center;gap:14px;margin:28px 0 0}.bio-document .bio-social-circle{display:grid;place-items:center;flex-shrink:0;width:44px;height:44px;padding:11px;border:1px solid transparent;border-radius:50%;background:var(--bio-accent);color:var(--bio-button-text);text-decoration:none;cursor:pointer}.bio-social-circle svg{display:block;width:20px;height:20px}.bio-social-circle:hover{opacity:.8}.bio-social-circle:focus-visible{outline:2px solid var(--bio-ink);outline-offset:4px}.bio-document .bio-social-empty{border:1px dashed currentColor;background:transparent;color:var(--bio-ink);opacity:.6}`;
   const previewStyles = document.createElement('style'); previewStyles.textContent = pageStyles; document.head.append(previewStyles);
   function variables() { return `--bio-bg:${state.background};--bio-ink:${state.ink};--bio-accent:${state.accent};--bio-button-text:${state.buttonText};--bio-radius:${{rounded:'12px',square:'2px',pill:'40px'}[state.shape]}`; }
+  function renderTemplates() {
+    $('#bio-template-grid').innerHTML = templates.map(template => `<button type="button" class="bio-template" data-template="${template.id}" aria-pressed="${appearanceKeys.every(key => state[key] === template[key])}"><span class="bio-template-sample" aria-hidden="true" style="--sample-bg:${template.background};--sample-ink:${template.ink};--sample-accent:${template.accent};--sample-button-text:${template.buttonText};--sample-radius:${{rounded:'6px',square:'1px',pill:'20px'}[template.shape]}"><span class="bio-template-avatar">A</span><span class="bio-template-line"></span><span class="bio-template-link">Aa</span><span class="bio-template-link">Aa</span><span class="bio-template-social">${socialDefaults.map(platform => `<span>${socialIcon(platform)}</span>`).join('')}</span></span><span>${t(template.id)}</span></button>`).join('');
+  }
+  $('#bio-template-grid').addEventListener('click', event => {
+    const template = templates.find(item => item.id === event.target.closest('[data-template]')?.dataset.template);
+    if (!template || publishing) return;
+    for (const key of appearanceKeys) { state[key] = template[key]; form.elements[key].value = template[key]; }
+    changed();
+    $('#bio-template-grid [data-template="'+template.id+'"]').focus();
+  });
   function renderPreview() {
-    $('#bio-preview').style.cssText = variables(); $('#bio-preview').innerHTML = markup();
-    renderProfileThumbs();
+    $('#bio-preview').style.cssText = variables(); $('#bio-preview').innerHTML = markup(true);
+    renderProfileThumbs(); renderTemplates();
   }
   function renderProfileThumbs() {
     for (const block of state.blocks.filter(item => item.type === 'profile')) {
@@ -120,7 +176,15 @@
       editor.querySelector('[data-block-action=removePhoto]').hidden = !block.photo;
     }
   }
-  $('#bio-preview').addEventListener('click', event => { if (event.target.closest('a')) event.preventDefault(); });
+  $('#bio-preview').addEventListener('click', event => {
+    const setup = event.target.closest('[data-setup-social]');
+    if (setup && !publishing) {
+      const block = state.blocks.find(item => item.type === 'social');
+      if (block) { tab('content'); setMinimized(block.id,false); $('[data-block-id="'+block.id+'"] [data-key=url'+setup.dataset.setupSocial+']').focus(); }
+      else { tab('content'); $('#add-block').click(); if(picker.open)picker.querySelector('[data-add=social]').click(); }
+    }
+    if (event.target.closest('a') && !event.target.closest('.bio-page-social')) event.preventDefault();
+  });
   function tab(name, focus = false) {
     for (const button of document.querySelectorAll('[data-tab]')) { const selected = button.dataset.tab === name; button.setAttribute('aria-selected', selected); button.tabIndex = selected ? 0 : -1; if (selected && focus) button.focus(); }
     $('#bio-content').hidden = name !== 'content'; $('#bio-appearance').hidden = name !== 'appearance';
@@ -129,15 +193,80 @@
     button.addEventListener('click', () => tab(button.dataset.tab));
     button.addEventListener('keydown', event => { if (['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) { event.preventDefault(); tab(event.key === 'Home' ? 'content' : event.key === 'End' ? 'appearance' : button.dataset.tab === 'content' ? 'appearance' : 'content', true); } });
   }
-  const picker = $('#block-picker');
-  $('#add-block').addEventListener('click', () => picker.showModal());
+  const picker = $('#block-picker'), detailsForm = $('#block-details-form');
+  let pendingBlock = null;
+  function resetPicker() {
+    pendingBlock = null;
+    detailsForm.hidden = true; detailsForm.reset(); $('#block-details-fields').replaceChildren();
+    $('.bio-block-types').hidden = false;
+    picker.querySelector('[data-add=social]').disabled = state.blocks.some(block => block.type === 'social');
+    $('#block-picker-title').innerHTML = label('choose');
+    $('#block-details-status').textContent = '';
+    $('#block-details-fields').disabled = false; $('#confirm-add-block').disabled = false;
+  }
+  $('#add-block').addEventListener('click', () => {
+    if (state.blocks.length >= 30) return status('blockLimit',true);
+    resetPicker(); picker.showModal();
+  });
   $('#close-block-picker').addEventListener('click', () => picker.close());
+  picker.addEventListener('close', resetPicker);
+  $('#back-block-picker').addEventListener('click', () => {
+    const type = pendingBlock?.type; resetPicker();
+    picker.querySelector('[data-add="'+type+'"]').focus();
+  });
   picker.addEventListener('click', event => {
     const type = event.target.closest('[data-add]')?.dataset.add;
-    if (!type || publishing) return;
-    if (state.blocks.length >= 30) { picker.close(); status('blockLimit', true); return; }
-    const block = {id:nextId++,type,...(type==='profile'?{name:'',bio:'',photo:''}:{})}; state.blocks.push(block); picker.close(); renderBlocks(); changed();
-    $(`[data-block-id="${block.id}"] .bio-drag-handle`).focus();
+    if (!type || publishing || (type === 'social' && state.blocks.some(block => block.type === 'social'))) return;
+    pendingBlock = {type};
+    $('.bio-block-types').hidden = true; detailsForm.hidden = false;
+    $('#block-picker-title').innerHTML = label('blockDetails');
+    $('#block-details-type').innerHTML = label(type);
+    const input = (key, attrs = '') => `<label>${label(key)}<input name="${key}" ${attrs} required></label>`;
+    let fields = '';
+    if (type === 'profile') fields = input('name','maxlength="100" autocomplete="name"');
+    if (type === 'link') fields = input('label','maxlength="100"') + input('url','type="url" placeholder="https://" maxlength="4096"');
+    if (type === 'text') fields = `<label>${label('text')}<textarea name="text" maxlength="3000" required></textarea></label>`;
+    if (type === 'heading') fields = input('heading','maxlength="200"');
+    if (type === 'image') fields = input('imageFile','type="file" accept="image/png,image/jpeg,image/webp,image/gif"') + `<p class="bio-hint">${label('imageHelp')}</p>`;
+    if (type === 'social') fields = socialFields();
+    if (type === 'divider') fields = `<p class="bio-hint">${label('dividerNote')}</p>`;
+    $('#block-details-fields').innerHTML = fields;
+    (detailsForm.querySelector('input,textarea') || $('#confirm-add-block')).focus();
+  });
+  detailsForm.addEventListener('input', event => { event.target.setCustomValidity?.(''); $('#block-details-status').textContent = ''; });
+  detailsForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const draft = pendingBlock;
+    if (!draft || publishing || $('#confirm-add-block').disabled) return;
+    for (const input of detailsForm.querySelectorAll('input:not([type=file]),textarea')) {
+      input.setCustomValidity(input.required && !input.value.trim() ? t('requiredContent') : input.type === 'url' && input.value.trim() && !validUrl(input.value) ? t('invalidUrl') : '');
+    }
+    if (!detailsForm.reportValidity()) return;
+    const block = {type:draft.type};
+    for (const input of detailsForm.querySelectorAll('input:not([type=file]),textarea,select')) block[input.name] = input.value.trim();
+    if (draft.type === 'profile') Object.assign(block,{bio:'',photo:''});
+    if (draft.type === 'image') {
+      const file = detailsForm.elements.imageFile.files[0];
+      $('#confirm-add-block').disabled = true; $('#block-details-fields').disabled = true;
+      $('#block-details-status').textContent = t('imageLoading');
+      try {
+        block.src = await readImage(file);
+        if (pendingBlock !== draft) return;
+        const total = state.blocks.reduce((sum,item) => sum + imageBytes(item.type === 'profile' ? item.photo : item.src),imageBytes(block.src));
+        if (total > 20*1024*1024) throw new Error('imageTotal');
+        Object.assign(block,{alt:'',caption:''});
+      } catch (error) {
+        if (pendingBlock === draft) $('#block-details-status').textContent = t(copy[error.message] ? error.message : 'imageError');
+        return;
+      } finally {
+        if (pendingBlock === draft) { $('#confirm-add-block').disabled = false; $('#block-details-fields').disabled = false; }
+      }
+    }
+    if (pendingBlock !== draft || !picker.open) return;
+    if (state.blocks.length >= 30) { $('#block-details-status').textContent = t('blockLimit'); return; }
+    block.id = nextId++; state.blocks.push(block); minimized.add(block.id);
+    picker.close(); renderBlocks(); changed();
+    $('[data-block-id="'+block.id+'"] [data-block-action=minimize]').focus();
   });
   $('#bio-blocks').addEventListener('click', event => {
     const button = event.target.closest('[data-block-action]'); if (!button || publishing) return;
@@ -150,7 +279,7 @@
     }
     if (action === 'removePhoto') state.blocks[index].photo = '';
     if (action === 'remove') { minimized.delete(id); state.blocks.splice(index,1); focusId = state.blocks[Math.min(index,state.blocks.length-1)]?.id; }
-    if (action === 'duplicate') { if (state.blocks.length >= 30) return status('blockLimit',true); const block = {...state.blocks[index],id:nextId++}; state.blocks.splice(index+1,0,block); focusId=block.id; }
+    if (action === 'duplicate') { if(state.blocks[index].type === 'social')return; if (state.blocks.length >= 30) return status('blockLimit',true); const block = {...state.blocks[index],id:nextId++}; state.blocks.splice(index+1,0,block); minimized.add(block.id); focusId=block.id; }
     renderBlocks(); changed(); (focusId ? $(`[data-block-id="${focusId}"] .bio-drag-handle`) : $('#add-block')).focus();
   });
   form.addEventListener('input', event => {
@@ -187,7 +316,7 @@
   });
   function validate() {
     if (loading) { status('imageLoading',true); return false; }
-    for (const input of form.querySelectorAll('[data-key=url]')) input.setCustomValidity(validUrl(input.value) ? '' : t('invalidUrl'));
+    for (const input of form.querySelectorAll('input[type=url]')) input.setCustomValidity((!input.required && !input.value.trim()) || validUrl(input.value) ? '' : t('invalidUrl'));
     form.elements.slug.setCustomValidity(form.elements.slug.value && !/^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/.test(form.elements.slug.value) ? t('slugError') : '');
     for (const input of form.querySelectorAll('input,textarea,select')) {
       const blockId = input.closest('[data-block-id]')?.dataset.blockId;
@@ -228,7 +357,8 @@
   const library=window.ZpropBioLibrary.mount({base,publishBase,t,label,esc,initialState:structuredClone(state),onSelect(record){
     minimized.clear();
     Object.assign(state,window.ZpropBioModel.upgrade(record.state));nextId=Math.max(0,...state.blocks.map(block=>block.id))+1;
-    for(const key of ['background','ink','accent','buttonText','shape'])form.elements[key].value=state[key];
+    state.blocks.forEach(block => minimized.add(block.id));
+    for(const key of appearanceKeys)form.elements[key].value=state[key];
     form.elements.slug.value=record.slug;form.querySelectorAll('input,textarea').forEach(input=>input.setCustomValidity(''));
     renderBlocks();renderPreview();tab('content');status('');publishLabel();
     publishedUrl=new URL(record.url,publishBase).href;
@@ -237,6 +367,7 @@
   window.ZpropBioDrag({container:$('#bio-blocks'),onOrder(ids){
     const blocks=new Map(state.blocks.map(block=>[block.id,block]));state.blocks=ids.map(id=>blocks.get(id));changed();
   },onFinish:renderBlocks,announce(position){$('#bio-reorder-status').textContent=t('moved')+' '+position;}});
+  state.blocks.forEach(block => minimized.add(block.id));
   renderBlocks(); renderPreview(); $('#close-block-picker').setAttribute('aria-label',t('close'));
   window.ZpropNavigation?.ready();
   library.load();

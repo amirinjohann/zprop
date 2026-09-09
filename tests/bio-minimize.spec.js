@@ -1,8 +1,10 @@
 ﻿const {test,expect}=require('./auth-fixture');
-const {createBio}=require('./bio-helper');
+const {createBio,expandBlocks,addBlock}=require('./bio-helper');
 test('minimizing preserves content, preview and publishing while keeping controls usable',async({page,request},info)=>{
   const slug=await createBio(page);
   const profile=page.locator('[data-block-type=profile]');
+  await expect(page.locator('.bio-block-fields:visible')).toHaveCount(0);
+  await profile.locator('[data-block-action=minimize]').click();
   await profile.locator('[data-key=name]').fill('Minimized profile');
   await page.locator('#save-bio-draft').click();await expect(page.locator('#tool-status')).toHaveText('Draft saved.');
   const collapse=profile.locator('[data-block-action=minimize]');
@@ -23,7 +25,6 @@ test('minimizing preserves content, preview and publishing while keeping control
   await profile.getByRole('switch').click();
   await page.locator('#publish-bio').click();await expect(page.locator('#bio-result')).toBeVisible();
   expect(await (await request.get('/sites/'+slug+'/')).text()).toContain('Minimized profile');
-  await page.locator('[data-block-type=link] [data-block-action=minimize]').click();
   await page.locator('#bio-blocks').scrollIntoViewIfNeeded();
   await page.screenshot({path:'test-results/minimized-blocks-'+info.project.name+'.png'});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -31,8 +32,9 @@ test('minimizing preserves content, preview and publishing while keeping control
   await expect(profile.locator('[data-key=name]')).toBeVisible();
   await page.reload();await expect(profile.locator('[data-key=name]')).toHaveValue('Minimized profile');
 });
-test('publishing expands a minimized block with invalid content or a missing image',async({page})=>{
-  await createBio(page);
+test('publishing expands a minimized block with invalid content or a missing image',async({page,request})=>{
+  const slug=await createBio(page);
+  await expandBlocks(page);
   const link=page.locator('[data-block-type=link]');
   await link.locator('[data-key=url]').fill('invalid');
   await link.locator('[data-block-action=minimize]').click();
@@ -40,9 +42,12 @@ test('publishing expands a minimized block with invalid content or a missing ima
   await expect(link.locator('[data-key=url]')).toBeVisible();
   await expect(link.locator('[data-key=url]')).toBeFocused();
   await link.locator('[data-key=url]').fill('https://example.com/');
-  await page.locator('#add-block').click();await page.locator('[data-add=image]').click();
+  await page.locator('#save-bio-draft').click();await expect(page.locator('#tool-status')).toHaveText('Draft saved.');
+  const record=await (await request.get('/api/bio-pages/'+slug)).json();
+  record.state.blocks.push({id:99,type:'image',src:'',alt:'',caption:''});
+  expect((await request.put('/api/bio-pages/'+slug,{data:{...record,publish:false}})).status()).toBe(200);
+  await page.reload();await expect(page.locator('.bio-block')).toHaveCount(3);
   const image=page.locator('[data-block-type=image]');
-  await image.locator('[data-block-action=minimize]').click();
   await page.locator('#publish-bio').click();
   await expect(image.locator('input[type=file]')).toBeVisible();
   await expect(image.locator('input[type=file]')).toBeFocused();
@@ -50,7 +55,6 @@ test('publishing expands a minimized block with invalid content or a missing ima
 });
 test('minimized blocks still float and swap using mouse or touch',async({page,context},info)=>{
   await createBio(page);
-  for(const button of await page.locator('[data-block-action=minimize]').all())await button.click();
   await page.locator('#bio-blocks').scrollIntoViewIfNeeded();
   const firstId=await page.locator('.bio-block').first().getAttribute('data-block-id');
   const handle=await page.locator('.bio-drag-handle').first().boundingBox();

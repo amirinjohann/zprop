@@ -1,10 +1,11 @@
 const {test,expect}=require('./auth-fixture');
-const {createBio}=require('./bio-helper');
+const {createBio,expandBlocks,addBlock}=require('./bio-helper');
 const fs=require('node:fs/promises');
 const path=require('node:path');
 
 test('profiles can be moved, added, duplicated and removed independently, then published',async({page,request})=>{
   const slug=await createBio(page);
+  await expandBlocks(page);
   const profiles=page.locator('[data-block-type=profile]');
   await profiles.locator('[data-key=name]').fill('First person');
   await profiles.locator('[data-key=bio]').fill('First introduction');
@@ -13,15 +14,15 @@ test('profiles can be moved, added, duplicated and removed independently, then p
   await profiles.locator('.bio-drag-handle').focus();await page.keyboard.press('ArrowDown');
   await expect(page.locator('.bio-page-blocks > *').first()).toHaveClass('bio-page-link');
   await expect(profiles.locator('[data-profile-thumb] img')).toBeVisible();
-  await page.locator('#add-block').click();await page.locator('[data-add=profile]').click();
+  await addBlock(page,'profile');await expandBlocks(page);
   await profiles.last().locator('[data-key=name]').fill('Second person');
   await profiles.last().locator('[data-key=bio]').fill('Second introduction');
-  await profiles.last().locator('[data-block-action=duplicate]').click();
+  await profiles.last().locator('[data-block-action=duplicate]').click();await expandBlocks(page);
   await profiles.last().locator('[data-key=name]').fill('Third person');
   await expect(page.locator('.bio-page-profile h3')).toHaveText(['First person','Second person','Third person']);
   await profiles.nth(1).locator('[data-block-action=remove]').click();
   await page.locator('#save-bio-draft').click();await expect(page.locator('#tool-status')).toHaveText('Draft saved.');
-  await page.reload();
+  await page.reload();await expect(page.locator('.bio-block').first()).toBeVisible();await expandBlocks(page);
   await expect(page.locator('.bio-page-profile h3')).toHaveText(['First person','Third person']);
   await expect(page.locator('.bio-page-blocks > *').first()).toHaveClass('bio-page-link');
   await expect(profiles.first().locator('[data-profile-thumb] img')).toBeVisible();
@@ -34,7 +35,7 @@ test('profiles can be moved, added, duplicated and removed independently, then p
   expect(html).toContain('First person');expect(html).toContain('Third person');expect(html).not.toContain('Second person');
   while(await profiles.count())await profiles.first().locator('[data-block-action=remove]').click();
   await page.locator('#publish-bio').click();await expect(page.locator('#bio-dirty')).toBeHidden();
-  await page.reload();await expect(page.locator('.bio-page-link')).toBeVisible();
+  await page.reload();await expect(page.locator('.bio-block').first()).toBeVisible();await expandBlocks(page);await expect(page.locator('.bio-page-link')).toBeVisible();
   await expect(page.locator('.bio-page-profile')).toHaveCount(0);
   const withoutProfile=await (await request.get(`/sites/${slug}/`)).text();
   expect(withoutProfile).not.toContain('<header class="bio-page-profile"');
@@ -43,6 +44,7 @@ test('profiles can be moved, added, duplicated and removed independently, then p
 
 test('legacy saved profiles become editable blocks without losing a full page or changing its published HTML',async({page,request})=>{
   const slug=await createBio(page);
+  await expandBlocks(page);
   const target=path.resolve('.generated-sites',slug,'.bio.json');
   const record=JSON.parse(await fs.readFile(target,'utf8'));
   const {schemaVersion,blocks,...style}=record.state;
@@ -51,14 +53,14 @@ test('legacy saved profiles become editable blocks without losing a full page or
   record.html='<h1>Existing published page</h1>';
   // Simulate an existing record from the previous release in this test-owned page.
   await fs.writeFile(target,JSON.stringify(record));
-  await page.reload();
+  await page.reload();await expect(page.locator('.bio-block').first()).toBeVisible();await expandBlocks(page);
   await expect(page.locator('[data-key=name]')).toHaveValue('Legacy person');
   await expect(page.locator('.bio-block')).toHaveCount(31);
   await expect(page.locator('.bio-avatar-image')).toBeVisible();
   expect(await (await request.get(`/sites/${slug}/`)).text()).toBe(record.html);
   await page.locator('[data-key=name]').fill('Updated legacy person');
   await page.locator('#save-bio-draft').click();await expect(page.locator('#tool-status')).toHaveText('Draft saved.');
-  await page.reload();await expect(page.locator('[data-key=name]')).toHaveValue('Updated legacy person');
+  await page.reload();await expect(page.locator('.bio-block').first()).toBeVisible();await expandBlocks(page);await expect(page.locator('[data-key=name]')).toHaveValue('Updated legacy person');
   await expect(page.locator('.bio-block')).toHaveCount(31);
   const saved=await (await request.get(`/api/bio-pages/${slug}`)).json();
   expect(saved.state.schemaVersion).toBe(2);

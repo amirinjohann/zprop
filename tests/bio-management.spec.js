@@ -1,5 +1,5 @@
 const {test,expect}=require('./auth-fixture');
-const {createBio}=require('./bio-helper');
+const {createBio,expandBlocks,addBlock}=require('./bio-helper');
 const unique=()=> 'managed-'+require('node:crypto').randomBytes(5).toString('hex');
 test('requires a name, saves pages, updates the same live link, renames and deletes',async({page,request,baseURL,browser},info)=>{
   await page.goto('/tools/bio-pages.html?lang=en');
@@ -10,6 +10,7 @@ test('requires a name, saves pages, updates the same live link, renames and dele
   expect(await page.locator('[name=newSlug]').evaluate(input=>input.validity.valueMissing)).toBe(true);
   const slug=unique();await page.locator('[name=newSlug]').fill(slug);await page.locator('#confirm-create-bio').click();
   await expect(page.locator('#tool-form')).toBeVisible();
+  await expandBlocks(page);
   expect((await request.get(`/sites/${slug}/`)).status()).toBe(404);
   await page.locator('[name=name]').fill('Saved studio');
   await page.locator('[data-key=url]').fill(baseURL+'/landing.html');
@@ -28,7 +29,7 @@ test('requires a name, saves pages, updates the same live link, renames and dele
   const card=page.locator(`[data-page-slug="${slug}"]`);
   await expect(card).toContainText('Published');
   await page.screenshot({path:`test-results/bio-library-${info.project.name}.png`,fullPage:true});
-  await card.locator('[data-page-action=edit]').click();
+  await card.locator('[data-page-action=edit]').click();await expect(page.locator('#tool-form')).toBeVisible();await expandBlocks(page);
   await page.locator('[name=name]').fill('Updated studio');
   await expect(page.locator('#publish-bio')).toContainText('Save changes');
   await page.locator('#publish-bio').click();await expect(page.locator('#bio-dirty')).toBeHidden();
@@ -48,6 +49,7 @@ test('requires a name, saves pages, updates the same live link, renames and dele
 });
 test('ownership, unique names and revision checks protect saved pages',async({page,request,browser,baseURL})=>{
   const slug=await createBio(page);
+  await expandBlocks(page);
   const record=await (await request.get(`/api/bio-pages/${slug}`)).json();
   const other=await browser.newContext();
   try{
@@ -69,11 +71,12 @@ test('ownership, unique names and revision checks protect saved pages',async({pa
     expect((await request.get(`/sites/${slug}/.bio.json`)).status()).toBe(404);
   }finally{await other.close();}
 });
-test('all fields stay visible and blocks drag with mouse or touch',async({page,context},info)=>{
+test('expanded fields stay visible and blocks drag with mouse or touch',async({page,context},info)=>{
   await createBio(page);
+  await expandBlocks(page);
   // Use compact divider blocks for a drag gesture within the viewport.
   while(await page.locator('.bio-block').count())await page.locator('.bio-block [data-block-action=remove]').first().click();
-  for(let i=0;i<3;i++){await page.locator('#add-block').click();await page.locator('[data-add=heading]').click();await page.locator('.bio-block').last().locator('[data-key=heading]').fill('Heading '+i);}
+  for(let i=0;i<3;i++){await addBlock(page,'heading',{heading:'Heading '+i});await expandBlocks(page);}
   await expect(page.locator('[data-block-action=up], [data-block-action=down], .bio-block details')).toHaveCount(0);
   for(const field of await page.locator('.bio-block [data-key]').all())await expect(field).toBeVisible();
   const firstId=await page.locator('.bio-block').first().getAttribute('data-block-id');
@@ -90,7 +93,7 @@ test('all fields stay visible and blocks drag with mouse or touch',async({page,c
   await expect(page.locator('.bio-block').nth(1)).toHaveAttribute('data-block-id',firstId);
   await expect(page.locator('.bio-page-heading').nth(1)).toHaveText('Heading 0');
   await page.locator('#save-bio-draft').click();await expect(page.locator('#tool-status')).toHaveText('Draft saved.');
-  await page.reload();await expect(page.locator('.bio-page-heading').nth(1)).toHaveText('Heading 0');
+  await page.reload();await expect(page.locator('.bio-page-heading').nth(1)).toHaveText('Heading 0');await expandBlocks(page);
   await expect(page.locator('.bio-block [data-key=heading]')).toHaveCount(3);
   for(const field of await page.locator('.bio-block [data-key]').all())await expect(field).toBeVisible();
 });

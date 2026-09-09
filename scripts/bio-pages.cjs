@@ -1,7 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const {upgrade} = require('../bio-model.js');
+const {upgrade,socialPlatforms} = require('../bio-model.js');
 const storage = path.resolve(__dirname, '../.generated-sites');
 const fail = (code, status = 400) => Object.assign(new Error(code), {status});
 function directory(slug) {
@@ -35,6 +35,7 @@ function model(value, publish, limit=30) {
     if(typeof value[key]!=='string'||!/^#[0-9a-f]{6}$/i.test(value[key]))throw fail('request'); result[key]=value[key];
   }
   if(!['rounded','square','pill'].includes(result.shape))throw fail('request');
+  if(value.blocks.filter(block => block.type === 'social').length > 1)throw fail('request');
   const ids=new Set();
   result.blocks=value.blocks.map(block=>{
     if(!block || !Number.isSafeInteger(block.id) || block.id<1 || ids.has(block.id))throw fail('request'); ids.add(block.id);
@@ -42,9 +43,20 @@ function model(value, publish, limit=30) {
     if(block.enabled!==undefined && typeof block.enabled!=='boolean')throw fail('request');
     if(block.enabled!==undefined)out.enabled=block.enabled;
     const publishBlock=publish&&block.enabled!==false;
-    const fields={profile:{name:100,bio:1000},link:{label:100,url:4096},text:{text:3000},heading:{heading:200},image:{alt:200,caption:300},divider:{}};
+    const fields={profile:{name:100,bio:1000},link:{label:100,url:4096},text:{text:3000},heading:{heading:200},image:{alt:200,caption:300},divider:{},social:{platform1:20,url1:4096,platform2:20,url2:4096,platform3:20,url3:4096}};
     if(!Object.hasOwn(fields,block.type))throw fail('request');
     for(const [key,max] of Object.entries(fields[block.type]))out[key]=string(block[key] || '',max);
+    if(block.type==='social') {
+      for(const slot of [1,2,3]) {
+        if(!Object.hasOwn(socialPlatforms,out['platform'+slot]))throw fail('request');
+        const link=out['url'+slot];
+        if(link && block.enabled!==false) {
+          let url;try{url=new URL(link);}catch{throw fail('invalidUrl');}
+          if(!['http:','https:'].includes(url.protocol)||!url.hostname||url.username||url.password)throw fail('invalidUrl');
+        }
+      }
+      if(publishBlock&&!out.url1.trim())throw fail('invalidUrl');
+    }
     if(block.type==='image') {out.src=image(block.src); if(publishBlock&&!out.src)throw fail('imageMissing');}
     if(block.type==='profile') {out.photo=image(block.photo);if(publishBlock&&!out.name.trim())throw fail('request');}
     if(publishBlock&&['link','text','heading'].includes(block.type)&&!out[block.type==='link'?'label':block.type].trim())throw fail('request');

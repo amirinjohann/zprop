@@ -1,17 +1,16 @@
 const { test, expect } = require('./auth-fixture');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { createBio } = require('./bio-helper');
+const { createBio, expandBlocks, addBlock } = require('./bio-helper');
 async function add(page, type) {
-  await page.locator('#add-block').click();
-  await expect(page.locator('#block-picker')).toBeVisible();
-  await page.locator(`[data-add=${type}]`).click();
-  await expect(page.locator('#block-picker')).not.toBeVisible();
-  return page.locator('.bio-block').last();
+  const block=await addBlock(page,type);
+  await block.locator('[data-block-action=minimize]').click();
+  return block;
 }
 test('blocks and images update the preview and export a complete publishable page', async ({page, request, baseURL}, info) => {
   const errors=[]; page.on('pageerror',error=>errors.push(error.message));
   await createBio(page);
+  await expandBlocks(page);
   await expect(page.locator('#tool-form .bio-address > span')).toHaveText(new URL(baseURL).host + '/sites/');
   await page.locator('[name=name]').fill('Aina Studio');
   await page.locator('[name=bio]').fill('Design, photography & everyday inspiration.');
@@ -67,6 +66,7 @@ test('blocks and images update the preview and export a complete publishable pag
 });
 test('block order, duplication, removal and keyboard picker preserve edited content', async ({page}) => {
   await createBio(page);
+  await expandBlocks(page);
   const heading=await add(page,'heading');
   await heading.locator('[data-key=heading]').fill('First section');
   await heading.locator('.bio-drag-handle').focus();await page.keyboard.press('ArrowUp');
@@ -88,6 +88,7 @@ test('block order, duplication, removal and keyboard picker preserve edited cont
 });
 test('unsafe links, invalid images and failed publishing have recoverable errors', async ({page}) => {
   await createBio(page);
+  await expandBlocks(page);
   await page.locator('[name=name]').fill('<img src=x onerror=alert(1)>');
   await expect(page.locator('#bio-preview h3')).toHaveText('<img src=x onerror=alert(1)>');
   await page.locator('[data-key=url]').fill('javascript:alert(1)');
@@ -95,13 +96,13 @@ test('unsafe links, invalid images and failed publishing have recoverable errors
   await page.locator('#publish-bio').click();
   expect(await page.locator('[data-key=url]').evaluate(input=>input.validity.valid)).toBe(false);
   await page.locator('[data-key=url]').fill('https://example.com/');
-  const image=await add(page,'image');
-  await image.locator('[type=file]').setInputFiles({name:'bad.svg',mimeType:'image/svg+xml',buffer:Buffer.from('<svg onload="alert(1)"></svg>')});
-  await expect(page.locator('#tool-status')).toContainText('Choose a valid');
+  await page.locator('#add-block').click();await page.locator('[data-add=image]').click();
+  await page.locator('#block-details-form [type=file]').setInputFiles({name:'bad.svg',mimeType:'image/svg+xml',buffer:Buffer.from('<svg onload="alert(1)"></svg>')});
+  await page.locator('#confirm-add-block').click();
+  await expect(page.locator('#block-details-status')).toContainText('Choose a valid');
   await expect(page.locator('.bio-page-image img')).toHaveCount(0);
-  await page.locator('#publish-bio').click();
-  await expect(page.locator('#tool-status')).toHaveText('Add an image to each image block first.');
-  await image.locator('[data-block-action=remove]').click();
+  await expect(page.locator('[data-block-type=image]')).toHaveCount(0);
+  await page.locator('#close-block-picker').click();
   await page.route('**/api/bio-pages/*',route=>route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'taken'})}));
   await page.locator('#publish-bio').click();
   await expect(page.locator('#tool-status')).toContainText('already taken');
