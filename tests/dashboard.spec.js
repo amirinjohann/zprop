@@ -88,7 +88,7 @@ test('dashboard has translated empty, loading and retry states with automatic re
 });
 
 test('vCard downloads are counted once per distinct card', async ({ page, request }) => {
-  await page.goto('/tools/vcards.html?lang=en');
+  await page.goto('/tools/vcards.html?lang=en');await page.locator('#new-item').click();
   await page.locator('[name=name]').fill('Dashboard contact');
   await page.locator('[name=phone]').fill('+60123456789');
   await page.locator('[name=email]').fill('contact@example.com');
@@ -98,7 +98,8 @@ test('vCard downloads are counted once per distinct card', async ({ page, reques
     expect((await downloaded).suggestedFilename()).toBe('zprop-contact.vcf');
     expect((await stats(request)).counts.vcards).toBe(1);
   }
-  await page.locator('[name=name]').fill('Another contact');
+  await page.locator('#back-item-library').click();await page.locator('#new-item').click();
+  await page.locator('[name=name]').fill('Another contact');await page.locator('[name=phone]').fill('+60123456789');await page.locator('[name=email]').fill('contact@example.com');
   const downloaded = page.waitForEvent('download');
   await page.locator('[data-action=downloadVcard]').click();
   await downloaded;

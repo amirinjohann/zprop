@@ -30,7 +30,8 @@ function model(value, publish, limit=30) {
     if(total>20*1024*1024)throw fail('imageTotal');
     return text;
   };
-  const result={schemaVersion:2,shape:value.shape};
+  const result={schemaVersion:2,shape:value.shape,layout:value.layout || 'classic'};
+  if(!['classic','poster','event','editorial'].includes(result.layout))throw fail('request');
   for(const key of ['background','ink','accent','buttonText']) {
     if(typeof value[key]!=='string'||!/^#[0-9a-f]{6}$/i.test(value[key]))throw fail('request'); result[key]=value[key];
   }
@@ -43,7 +44,7 @@ function model(value, publish, limit=30) {
     if(block.enabled!==undefined && typeof block.enabled!=='boolean')throw fail('request');
     if(block.enabled!==undefined)out.enabled=block.enabled;
     const publishBlock=publish&&block.enabled!==false;
-    const fields={profile:{name:100,bio:1000},link:{label:100,url:4096},text:{text:3000},heading:{heading:200},image:{alt:200,caption:300},divider:{},social:{platform1:20,url1:4096,platform2:20,url2:4096,platform3:20,url3:4096}};
+    const fields={profile:{name:100,bio:1000},link:{label:100,url:4096},text:{text:3000},heading:{heading:200},image:{alt:200,caption:300},html:{html:20000,title:100},divider:{},social:{platform1:20,url1:4096,platform2:20,url2:4096,platform3:20,url3:4096}};
     if(!Object.hasOwn(fields,block.type))throw fail('request');
     for(const [key,max] of Object.entries(fields[block.type]))out[key]=string(block[key] || '',max);
     if(block.type==='social') {
@@ -56,6 +57,11 @@ function model(value, publish, limit=30) {
         }
       }
       if(publishBlock&&!out.url1.trim())throw fail('invalidUrl');
+    }
+    if(block.type==='html') {
+      out.height=block.height ?? 240;
+      if(!Number.isInteger(out.height)||out.height<80||out.height>1600)throw fail('request');
+      if(publishBlock&&!out.html.trim())throw fail('request');
     }
     if(block.type==='image') {out.src=image(block.src); if(publishBlock&&!out.src)throw fail('imageMissing');}
     if(block.type==='profile') {out.photo=image(block.photo);if(publishBlock&&!out.name.trim())throw fail('request');}
@@ -107,19 +113,14 @@ async function handle(req,slug,ownerId) {
     await fs.rm(directory(slug),{recursive:true}); return {ok:true};
   }
   if(req.method!=='PUT')throw fail('method',405);
-  const data=await body(req),nextSlug=data?.slug, target=directory(nextSlug),source=directory(slug);
+  const data=await body(req),target=directory(slug);
+  if(data?.slug!==undefined&&data.slug!==slug)throw fail('slugLocked');
   if(typeof data.publish!=='boolean')throw fail('request');
   if(data.revision!==record.revision)throw fail('conflict',409);
   const state=model(data.state,data.publish===true,Math.max(30,upgrade(record.state).blocks.length));
   if(data.publish && (typeof data.html!=='string'||!data.html.trim()||Buffer.byteLength(data.html)>30*1024*1024))throw fail('request');
   const updated={...record,state,html:data.publish?data.html:record.html,revision:record.revision+1,updatedAt:new Date().toISOString()};
-  if(nextSlug!==slug) {
-    // All bio/static-site mutations share the server queue, so a name cannot
-    // be claimed between this existence check and the directory rename.
-    try{await fs.access(target);throw fail('taken',409);}catch(error){if(error.code!=='ENOENT')throw error;}
-    await fs.rename(source,target);
-  }
-  try{await write(target,updated);}catch(error){if(nextSlug!==slug)await fs.rename(target,source);throw error;}
-  return full(nextSlug,updated);
+  await write(target,updated);
+  return full(slug,updated);
 }
 module.exports={handle};

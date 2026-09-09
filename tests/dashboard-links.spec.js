@@ -20,7 +20,7 @@ test('live Links list and cards follow creates and deletes in every category wit
   await page.goto('/tools/dashboard.html?lang=en');
   await expect(page.locator('#links-total')).toHaveText('0');
   // Stop the 30-second fallback timer: updates must arrive over the live stream.
-  await page.clock.pauseAt(new Date());
+  await page.clock.pauseAt(new Date(Date.now()+60000));
   await createAll(request);
   await expect(page.locator('#links-total')).toHaveText('6',{timeout:5000});
   await expect(page.locator('#summary-total')).toHaveText('6');

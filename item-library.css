@@ -1,0 +1,2 @@
+﻿#item-editor[hidden],#item-library[hidden],#item-dirty[hidden]{display:none!important}#item-dirty{margin-left:auto;color:var(--muted)}
+@media(max-width:760px){#item-dirty{width:100%;margin-left:0}}

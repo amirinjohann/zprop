@@ -70,9 +70,9 @@ window.ZpropBioLibrary = {
       get active(){return active;},
       changed(){dirty=true;$('#bio-dirty').hidden=false;},
       async load(){await refresh();const slug=new URL(location.href).searchParams.get('page');if(slug)await open(slug);},
-      async save({slug,state,html,publish}) {
+      async save({state,html,publish}) {
         if(!active||busy)throw new Error('busy');busy=true;
-        try{const record=await api(active.slug,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug,state,html,publish,revision:active.revision})});active=record;dirty=false;$('#bio-dirty').hidden=true;$('#bio-active-name').textContent=record.slug;setQuery(record.slug);return record;}
+        try{const record=await api(active.slug,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:active.slug,state,html,publish,revision:active.revision})});active=record;dirty=false;$('#bio-dirty').hidden=true;$('#bio-active-name').textContent=record.slug;setQuery(record.slug);return record;}
         finally{busy=false;}
       }
     };

@@ -58,11 +58,12 @@ http.createServer(async (req, res) => {
     finally {pendingCreates--;release();}
     return;
   }
-  if (['/api/dashboard-stats','/api/dashboard-links','/api/vcards'].includes(pathname)) {
+  const vcardRoute=pathname.match(/^\/api\/vcards(?:\/([a-f0-9]{64}))?$/);
+  if (['/api/dashboard-stats','/api/dashboard-links'].includes(pathname)||vcardRoute) {
     const json = (status, data) => res.writeHead(status, { 'Content-Type':'application/json', 'Cache-Control':'no-store' }).end(JSON.stringify(data));
-    const tracking = pathname === '/api/vcards';
-    if (req.method !== (tracking ? 'POST' : 'GET')) { json(405, { error:'method' }); return; }
-    if (tracking && !auth.sameOrigin(req)) { json(403, { error:'origin' }); return; }
+    const tracking = !!vcardRoute;
+    if (!tracking && req.method !== 'GET') { json(405, { error:'method' }); return; }
+    if (tracking && req.method!=='GET' && !auth.sameOrigin(req)) { json(403, { error:'origin' }); return; }
     // Read a committed snapshot, without racing file replacement on Windows.
     if(pendingCreates>=8) {json(429,{error:'busy'});return;}
     const previous=creationQueue;let release;
@@ -70,7 +71,7 @@ http.createServer(async (req, res) => {
     await previous;
     try {
       const ownerId = auth.session(req).user.id;
-      json(200, await (tracking ? dashboardStats.trackVcard(req, ownerId) : dashboardStats.summary(ownerId, pathname==='/api/dashboard-links')));
+      json(200, await (tracking ? require('./vcards.cjs').handle(req,vcardRoute[1],ownerId) : dashboardStats.summary(ownerId, pathname==='/api/dashboard-links')));
     } catch (error) { json(error.status || 500, { error:error.status ? error.message : 'server' }); }
     finally {pendingCreates--;release();}
     return;
@@ -133,7 +134,7 @@ http.createServer(async (req, res) => {
       const result = await sites.read(pathname.endsWith('/') ? pathname+'index.html' : pathname);
       const sandbox = result.bio ? 'sandbox allow-popups allow-popups-to-escape-sandbox' : 'sandbox allow-scripts';
       const scripts = result.bio ? "'none'" : "'self' 'unsafe-inline'";
-      res.writeHead(200, { 'Content-Type':types[result.extension] || 'application/octet-stream', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'no-referrer', 'Content-Security-Policy':`${sandbox}; default-src 'self' data: blob:; script-src ${scripts}; style-src 'self' 'unsafe-inline'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'` });
+      res.writeHead(200, { 'Content-Type':types[result.extension] || 'application/octet-stream', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'no-referrer', 'Content-Security-Policy':`${sandbox}; default-src 'self' data: blob:; script-src ${scripts}; style-src 'self' 'unsafe-inline'; connect-src 'none'; frame-src ${result.bio ? "'self'" : "'none'"}; ${result.bio ? "img-src 'self' https: data:;" : ''} object-src 'none'; base-uri 'none'; form-action 'none'` });
       res.end(req.method === 'HEAD' ? undefined : result.data);
     } catch { res.writeHead(404).end('Site or file not found'); }
     return;

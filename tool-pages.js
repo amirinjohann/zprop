@@ -12,6 +12,7 @@
   Object.assign(copy, {
     linkDomain:['Domain pautan','Link domain'], createLink:['Cipta pautan pendek','Create short link'], creatingLink:['Sedang mencipta pautan…','Creating your link…'], linkReady:['PAUTAN DICIPTA','LINK CREATED'], linkEmpty:['Pautan anda akan dipaparkan selepas dicipta.','Your link will appear here after creation.'], linkHint:['Nama pilihan: 2–50 huruf, nombor, sempang atau garis bawah. Biarkan kosong untuk nama rawak.','Optional name: 2–50 letters, numbers, hyphens or underscores. Leave empty for a random name.'], copyLink:['Salin pautan','Copy link'], openLink:['Buka pautan','Open link'], linkCopied:['Pautan disalin.','Link copied.'], linkCopyFailed:['Pilih dan salin alamat pautan di atas.','Select and copy the link address above.'], linkTaken:['Nama pautan sudah digunakan. Pilih nama lain.','This link name is already taken. Choose another name.'], linkSlug:['Gunakan 2–50 huruf, nombor, sempang atau garis bawah.','Use 2–50 letters, numbers, hyphens or underscores.'], linkLoop:['Destinasi tidak boleh menjadi pautan pendek itu sendiri.','The destination cannot be the short link itself.'], linkServer:['Pelayan tidak dapat menyimpan pautan. Cuba lagi.','The server could not save the link. Please try again.'], linkUnavailable:['Perkhidmatan pautan tidak tersedia buat masa ini. Sila cuba lagi.','The link service is unavailable right now. Please try again.'], linkNetwork:['Tidak dapat menghubungi pelayan. Semak sambungan anda dan cuba lagi.','Could not reach the server. Check your connection and try again.'], linkOrigin:['Permintaan ditolak. Buka alatan terus pada pelayan ZPROP.','Request rejected. Open the tool directly on the ZPROP server.'], linkSize:['URL terlalu panjang. Had ialah 4,096 aksara.','The URL is too long. The limit is 4,096 characters.'], linkRequest:['Maklumat pautan tidak sah. Semak dan cuba lagi.','The link details are invalid. Check them and try again.']
   });
+  Object.assign(copy,{saveVcard:['Simpan vCard','Save vCard'],cardSaved:['vCard disimpan.','vCard saved.'],cardSaving:['Menyimpan vCard...','Saving vCard...'],conflict:['vCard telah berubah. Buka semula sebelum menyimpan.','This vCard changed elsewhere. Reopen it before saving.'],cardStorage:['Butiran disimpan secara peribadi dalam akaun anda untuk diedit dan dimuat turun semula.','Details are saved privately to your account so you can edit and download them again.']});
   const t=key=>copy[key][language];
   copy.linkReserved=['Nama ini digunakan oleh laman web. Pilih nama pautan lain.','This name is used by the website. Choose another link name.'];
   copy.linkHint[0]+=' Nama mesti unik untuk semua pengguna. Huruf besar dan kecil dianggap sama.';
@@ -30,20 +31,18 @@
   const action=(key,primary=false)=>`<button type="button" data-action="${key}" data-tool-copy="${key}" class="${primary?'primary':''}">${t(key)}</button>`;
   const val=name=>$('#tool-form').elements[name].value.trim();
   const input=name=>$('#tool-form').elements[name];
-  let lastStatus='',selectedFiles=[];
+  let lastStatus='',selectedFiles=[],library=null;
   function status(key){lastStatus=key;$('#tool-status').textContent=key?t(key):'';}
   function valid(){return $('#tool-form').reportValidity();}
   function validUrl(value){try{const u=new URL(value);return ['http:','https:'].includes(u.protocol)&&!!u.hostname&&!u.username&&!u.password;}catch{return false;}}
   function download(text,name,type){try{const url=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);status('saved');}catch{status('storageError');}}
-  const escapeLine=s=>String(s).replace(/\\/g,'\\\\').replace(/\r?\n/g,'\\n').replace(/;/g,'\\;').replace(/,/g,'\\,');
-  const fold=s=>s.split('\r\n').map(line=>{let result='',bytes=0;for(const ch of line){const n=new TextEncoder().encode(ch).length;if(bytes+n>75){result+='\r\n ';bytes=1;}result+=ch;bytes+=n;}return result;}).join('\r\n');
   const defaultHtml='<!DOCTYPE html>\n<html lang="ms">\n<head><meta charset="UTF-8"><title>ZPROP</title></head>\n<body style="font-family:Georgia;padding:32px;background:#f8f8f2;color:#183e32">\n  <h1>ZPROP.</h1>\n  <p>Ruang baharu. Cerita baharu.</p>\n</body>\n</html>';
   let editor='',preview='';
   switch(tool.id){
     case 'bio-pages':editor=field('name','text','ZPROP','maxlength="100"')+area('bio',language?'Your property partner.':'Rakan hartanah anda.','maxlength="500"')+field('label','text',language?'Explore properties':'Terokai hartanah','maxlength="80"')+field('url','url',window.ZPROP_PUBLIC_ORIGIN)+`<div class="tool-actions">${action('generate')}${action('downloadHtml',true)}</div>`;preview='<div class="bio-preview" id="bio-preview"></div>';break;
     case 'short-links':editor=field('url','url','','placeholder="https://www.example.com/" maxlength="4096"')+field('linkDomain','text',window.ZPROP_PUBLIC_ORIGIN,'readonly')+`<label><span data-tool-copy="slug">${t('slug')}</span><input name="slug" pattern="[a-zA-Z0-9_-]{2,50}" maxlength="50" placeholder="your-linkname" aria-describedby="link-hint"></label><p id="link-hint" class="timezone-note" data-tool-copy="linkHint">${t('linkHint')}</p><div class="tool-actions">${action('createLink',true)}</div>`;preview=`<p id="link-empty" class="tool-empty" data-tool-copy="linkEmpty">${t('linkEmpty')}</p><div id="link-result" hidden><span class="draft-label" data-tool-copy="linkReady">${t('linkReady')}</span><a class="draft-address" id="short-address" target="_blank" rel="noopener noreferrer"></a><div class="tool-actions"><a id="open-short-link" target="_blank" rel="noopener noreferrer" data-tool-copy="openLink">${t('openLink')}</a><button type="button" id="copy-short-link" data-tool-copy="copyLink">${t('copyLink')}</button></div></div>`;break;
     case 'transfer-files':editor=`<label><span data-tool-copy="fileChoose">${t('fileChoose')}</span><input name="files" type="file" accept=".pdf,.xls,.xlsx" required aria-describedby="file-help"></label><p id="file-help" class="timezone-note" data-tool-copy="fileHelp">${t('fileHelp')}</p><p id="file-summary" class="file-summary"></p>`+field('linkDomain','text',window.ZPROP_PUBLIC_ORIGIN,'readonly')+`<label><span data-tool-copy="slug">${t('slug')}</span><input name="slug" pattern="[a-zA-Z0-9_-]{2,50}" maxlength="50" placeholder="your-linkname" aria-describedby="link-hint"></label><p id="link-hint" class="timezone-note" data-tool-copy="linkHint">${t('linkHint')}</p><div class="tool-actions">${action('clear')}${action('createFileLink',true)}</div>`;preview=`<p id="file-empty" class="tool-empty" data-tool-copy="filePreview">${t('filePreview')}</p><div id="file-result" hidden><span class="draft-label" data-tool-copy="fileReady">${t('fileReady')}</span><p id="uploaded-file-name" class="uploaded-file-name"></p><a id="file-address" class="draft-address" target="_blank" rel="noopener noreferrer"></a><div class="tool-actions"><a id="open-file" target="_blank" rel="noopener noreferrer" data-tool-copy="fileOpen">${t('fileOpen')}</a><a id="download-file" data-tool-copy="fileDownload">${t('fileDownload')}</a><button type="button" id="copy-file-link" data-tool-copy="copyLink">${t('copyLink')}</button></div><p class="file-behavior" data-tool-copy="fileBehavior">${t('fileBehavior')}</p></div>`;break;
-    case 'vcards':editor=field('name','text','','maxlength="100"')+field('company','text','ZPROP','maxlength="100"')+field('phone','tel','','pattern="[+0-9() .-]{5,30}" maxlength="30"')+field('email','email','','maxlength="254"')+`<div class="tool-actions">${action('downloadVcard',true)}</div>`;break;
+    case 'vcards':editor=field('name','text','','maxlength="100"')+field('company','text','ZPROP','maxlength="100"')+field('phone','tel','','pattern="[+0-9() .-]{5,30}" maxlength="30"')+field('email','email','','maxlength="254"')+`<div class="tool-actions">${action('saveVcard',true)}${action('downloadVcard')}</div><p class="short-hint" data-tool-copy="cardStorage">${t('cardStorage')}</p>`;break;
     case 'host-html':editor=area('html',defaultHtml,'class="code-input" maxlength="100000" required')+`<div class="tool-actions">${action('generate')}${action('downloadHtml',true)}</div>`;preview='<iframe class="html-preview" id="html-preview" sandbox="" title="HTML preview" referrerpolicy="no-referrer"></iframe>';break;
   }
   $('#tool-workspace').innerHTML=`<div class="${preview?'workspace-grid':''}"><form id="tool-form" class="tool-editor"><h2 class="workspace-title" data-tool-copy="editor">${t('editor')}</h2>${editor}<p class="tool-status" id="tool-status" role="status"></p></form>${preview?`<section class="tool-preview"><h2 class="workspace-title" data-tool-copy="preview">${t('preview')}</h2>${preview}</section>`:''}</div>`;
@@ -72,12 +71,12 @@
         fileUrl=new URL(result.url,window.ZPROP_PUBLIC_ORIGIN).href;
         $('#uploaded-file-name').textContent=result.filename;
         $('#file-address').textContent=fileUrl;$('#file-address').href=fileUrl;$('#open-file').href=fileUrl;$('#download-file').href=fileUrl+'?download=1';
-        $('#file-result').hidden=false;$('#file-empty').hidden=true;status('fileReady');
+        $('#file-result').hidden=false;$('#file-empty').hidden=true;status('fileReady');library.saved();
       }catch(error){status(copy[error.message]?error.message:'fileServer');}
       finally{uploading=false;form.removeAttribute('aria-busy');for(const control of [button,clear,input('files'),input('slug')])control.disabled=false;}
     }
     button.addEventListener('click',createFileLink);form.addEventListener('submit',createFileLink);
-    clear.addEventListener('click',()=>{if(uploading)return;form.reset();selectedFiles=[];fileList();resetResult();status('');});
+    clear.addEventListener('click',()=>{if(uploading)return;form.reset();selectedFiles=[];fileList();resetResult();status('');library.saved(null);});
     input('files').addEventListener('change',()=>{selectedFiles=[...input('files').files];fileList();resetResult();status(checkFile(selectedFiles[0]));});
     form.addEventListener('input',resetResult);
     $('#copy-file-link').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(fileUrl);status('linkCopied');}catch{status('linkCopyFailed');}});
@@ -110,7 +109,6 @@
     $('#copy-short-link').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(createdUrl);status('linkCopied');}catch{status('linkCopyFailed');}});
   }
   function bioMarkup(){return `<div class="bio-avatar">${esc(val('name').slice(0,1)||'Z')}</div><h3>${esc(val('name'))}</h3><p>${esc(val('bio'))}</p>${validUrl(val('url'))?`<a href="${esc(val('url'))}" target="_blank" rel="noopener noreferrer">${esc(val('label'))}</a>`:''}`;}
-  function vcard(){const full=val('name');return fold(`BEGIN:VCARD\r\nVERSION:3.0\r\nFN:${escapeLine(full)}\r\nN:;${escapeLine(full)};;;\r\nORG:${escapeLine(val('company'))}\r\nTEL;TYPE=CELL:${escapeLine(val('phone'))}\r\nEMAIL:${escapeLine(val('email'))}\r\nEND:VCARD\r\n`);}
   function fileList(){const file=selectedFiles[0];$('#file-summary').textContent=file?`${file.name} · ${(file.size/1024).toFixed(1)} KB`:t('noFiles');}
   function updatePreview(){
     if(tool.id==='bio-pages')$('#bio-preview').innerHTML=bioMarkup();
@@ -125,17 +123,20 @@
     if(!valid())return;
     if(['bio-pages','short-links'].includes(tool.id)&&!validUrl(val('url'))){status('invalidUrl');return;}
     updatePreview();
-    if(action==='downloadVcard') {
-      button.disabled=true;
+    if(['downloadVcard','saveVcard'].includes(action)) {
+      const form=$('#tool-form');if(form.getAttribute('aria-busy')==='true')return;
+      const state=Object.fromEntries(['name','company','phone','email'].map(key=>[key,val(key)]));
+      form.setAttribute('aria-busy','true');for(const control of form.querySelectorAll('input,button'))control.disabled=true;
+      status('cardSaving');
       try {
-        const content=vcard();
-        const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(content));
-        const id=Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('');
-        const response=await window.ZpropAuth.fetch('/api/vcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id}),signal:AbortSignal.timeout(15000)});
-        if(!response.ok)throw new Error('tracking');
-        download(content,'zprop-contact.vcf','text/vcard;charset=utf-8');
-      } catch { status('storageError'); }
-      finally { button.disabled=false; }
+        const active=library.active;
+        const response=await window.ZpropAuth.fetch('/api/vcards'+(active?'/'+active.id:''),{method:active?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({state,...(active?{revision:active.revision}:{})}),signal:AbortSignal.timeout(15000)});
+        const saved=await response.json();if(!response.ok)throw Error(saved.error);
+        library.saved(saved);
+        if(action==='downloadVcard')download(window.ZpropVcard.format(saved.state),'zprop-contact.vcf','text/vcard;charset=utf-8');
+        else status('cardSaved');
+      } catch(error) { status(error.message==='conflict'?'conflict':'storageError'); }
+      finally {form.removeAttribute('aria-busy');for(const control of form.querySelectorAll('input,button'))control.disabled=false;}
     }
     if(action==='downloadHtml'){
       const html=tool.id==='host-html'?input('html').value:`<!DOCTYPE html><html lang="${language?'en':'ms'}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(val('name'))}</title><style>body{background:#f8f8f2;color:#183e32;font-family:Georgia,serif;padding:40px 20px}.bio-preview{max-width:400px;margin:auto;background:white;border:1px solid #dce1d7;padding:35px;text-align:center}.bio-avatar{font-size:40px}h3{font-size:30px}p{white-space:pre-wrap;line-height:1.7}a{display:block;background:#183e32;color:white;padding:16px;text-decoration:none}</style></head><body><main class="bio-preview">${bioMarkup()}</main></body></html>`;
@@ -159,5 +160,9 @@
   }
   document.addEventListener('zprop:language',localize);
   updatePreview();localize();
+  if(['transfer-files','vcards'].includes(tool.id))library=window.ZpropItemLibrary.mount({category:tool.id,onCreate(){
+    $('#tool-form').reset();selectedFiles=[];status('');
+    if(tool.id==='transfer-files'){fileList();$('#file-result').hidden=true;$('#file-empty').hidden=false;}
+  },onEdit(record){for(const key of ['name','company','phone','email'])input(key).value=record.state[key];status('');},onDownload(record){download(window.ZpropVcard.format(record.state),'zprop-contact.vcf','text/vcard;charset=utf-8');}});
   window.ZpropNavigation?.ready();
 })();

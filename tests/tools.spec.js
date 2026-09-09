@@ -43,7 +43,7 @@ test('bio HTML escapes user supplied text',async({page})=>{
 });
 
 test('vCard exports contain the entered details',async({page})=>{
-  await page.goto('/tools/vcards.html?lang=en');
+  await page.goto('/tools/vcards.html?lang=en');await page.locator('#new-item').click();
   await page.locator('[name=name]').fill('Aina, ZPROP');
   await page.locator('[name=phone]').fill('+60123456789');
   await page.locator('[name=email]').fill('aina@example.com');
@@ -53,7 +53,7 @@ test('vCard exports contain the entered details',async({page})=>{
 });
 
 test('HTML preview is isolated',async({page})=>{
-  await page.goto('/tools/host-html.html?lang=en');
+  await page.goto('/tools/host-html.html?lang=en');await page.locator('#new-item').click();
   await page.getByRole('tab',{name:'Paste HTML'}).click();
   await page.locator('[name=html]').fill('<h1>Test home</h1><script>parent.document.body.dataset.compromised="yes"</script>');
   await page.locator('[data-action=generate]').click();

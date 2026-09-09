@@ -50,7 +50,8 @@ async function summary(ownerId, includeLinks = false) {
       }
       for (const entry of await entries(path.join(root, '.created-vcards', ownerId))) {
         if (!entry.isFile() || !/^[a-f0-9]{64}\.json$/.test(entry.name)) continue;
-        add('vcards', { id:entry.name.slice(0,-5), name:'vCard · '+entry.name.slice(0,8), url:null, status:'generated', updatedAt:includeLinks?await modified(path.join(root,'.created-vcards',ownerId,entry.name)):null });
+        const card=includeLinks?await record(path.join(root,'.created-vcards',ownerId,entry.name)):null;
+        add('vcards', { id:entry.name.slice(0,-5), name:card?.state?.name || 'vCard \u00b7 '+entry.name.slice(0,8), url:null, status:card?.state?'saved':'generated', updatedAt:card?.updatedAt || (includeLinks?await modified(path.join(root,'.created-vcards',ownerId,entry.name)):null), ...(card?.state?{revision:card.revision,manageUrl:'/tools/vcards.html?item='+entry.name.slice(0,-5)}:{}) });
       }
     })()
   ]);
@@ -58,26 +59,10 @@ async function summary(ownerId, includeLinks = false) {
   return { counts, total:Object.values(counts).reduce((sum, count) => sum + count, 0), ...(includeLinks?{links}:{}) };
 }
 
-// Only a content fingerprint is recorded; contact fields stay in the browser.
-// Repeated downloads of the same card count as one item for this account.
-async function trackVcard(req, ownerId) {
-  let body = '', size = 0;
-  for await (const chunk of req) {
-    size += chunk.length;
-    if (size > 256) throw Object.assign(new Error('size'), { status:413 });
-    body += chunk.toString('utf8');
-  }
-  let id;
-  try { id = JSON.parse(body).id; } catch {}
-  if (typeof id !== 'string' || !/^[a-f0-9]{64}$/.test(id)) throw Object.assign(new Error('request'), { status:400 });
-  const directory = path.join(root, '.created-vcards', ownerId);
-  await fs.mkdir(directory, { recursive:true });
-  try { await fs.writeFile(path.join(directory, id + '.json'), '{}', { flag:'wx', mode:0o600 }); }
-  catch (error) { if (error.code !== 'EEXIST') throw error; }
-  return { ok:true };
-}
+async function trackVcard(req,ownerId) { return require('./vcards.cjs').handle(req,undefined,ownerId); }
 async function remove(req, category, id, ownerId) {
   const fail = () => Object.assign(new Error('notFound'), { status:404 });
+  if (category === 'vcards') return require('./vcards.cjs').handle(req,id,ownerId);
   if (category === 'bio-pages') return require('./bio-pages.cjs').handle(req,id,ownerId);
   if (category === 'qr-codes') return require('./qr-codes.cjs').handle(req,id,ownerId);
   if (category === 'short-links') return require('./short-links.cjs').handle(req,id,ownerId);
@@ -91,10 +76,6 @@ async function remove(req, category, id, ownerId) {
     const storage = path.join(root,'.generated-sites'), target = path.join(storage,id);
     if (path.dirname(target)!==storage || (await record(path.join(target,'.site.json')))?.ownerId!==ownerId || await record(path.join(target,'.bio.json'))) throw fail();
     await fs.rm(target,{recursive:true});
-  } else if (category === 'vcards') {
-    if (!/^[a-f0-9]{64}$/.test(id)) throw fail();
-    try { await fs.unlink(path.join(root,'.created-vcards',ownerId,id+'.json')); }
-    catch(error) { if(error.code==='ENOENT') throw fail(); throw error; }
   } else throw fail();
   return { ok:true };
 }

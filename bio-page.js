@@ -26,13 +26,23 @@
   Object.assign(copy,{minimize:['Minimumkan blok','Minimize block'],expand:['Kembangkan blok','Expand block']});
   const minimized = new Set();
   Object.assign(copy, {
-    templates:['Templat permulaan','Starter templates'], templatesHelp:['Pilih gaya sebagai permulaan, kemudian sesuaikan warna anda. Kandungan anda dikekalkan.','Start with a look, then customize your colors. Your content stays in place.'],
+    templates:['Templat permulaan','Starter templates'],
     botanical:['Botani','Botanical'], studio:['Studio','Studio'], midnight:['Tengah malam','Midnight'], rose:['Mawar','Rose'], ocean:['Lautan','Ocean'], sunset:['Senja','Sunset'],
-    blockDetails:['Butiran blok','Block details'], detailsHelp:['Isi maklumat penting dahulu. Anda boleh menambah butiran lain selepas ini.','Fill in the essentials first. You can add other details later.'], back:['Kembali','Back'], requiredContent:['Isi ruangan ini.','Please fill in this field.']
+    blockDetails:['Butiran blok','Block details'], detailsHelp:['Sesuaikan blok anda. Ruangan bertanda * wajib diisi.','Customize your block. Fields marked * are required.'], back:['Kembali','Back'], requiredContent:['Isi ruangan ini.','Please fill in this field.']
   });
   Object.assign(copy, {
     social:['Media sosial','Social links'], socialHelp:['Tiga pautan bulat ke profil sosial anda.','Three circular links to your social profiles.'], socialNote:['Dipaparkan di bawah kandungan halaman. Isi pautan pertama; dua lagi adalah pilihan.','Shown below your page content. Add your first link; the other two are optional.'], socialSlot:['Pautan sosial','Social link'], platform:['Platform','Platform'], socialUrl:['URL profil','Profile URL'], optional:['pilihan','optional'], addSocial:['Tambah pautan sosial','Add social links'], editSocial:['Edit pautan sosial','Edit social links']
   });
+  Object.assign(copy, {
+    poster:['Poster','Poster'], event:['Acara','Event'], editorial:['Editorial','Editorial'],
+    html:['HTML tersuai','Custom HTML'], htmlHelp:['Tambah reka bentuk anda dengan HTML dan CSS.','Add your own design with HTML and CSS.'],
+    htmlNote:['HTML dan CSS disokong. Skrip tidak dijalankan.','HTML and CSS are supported. Scripts do not run.'],
+    htmlCode:['Kod HTML','HTML code'], htmlTitle:['Tajuk aksesibiliti (pilihan)','Accessible title (optional)'], htmlHeight:['Tinggi (piksel)','Height (pixels)'],
+    live:['Halaman langsung','Live page'], readyHelp:['Sedia untuk dikongsi dengan dunia.','Ready to share with the world.']
+  });
+  const outlineIcon = paths => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+paths+'</svg>';
+  const closeIcon = outlineIcon('<path d="m6 6 12 12M18 6 6 18"/>');
+  const duplicateIcon = outlineIcon('<rect x="8" y="8" width="12" height="12" rx="3"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>');
   const socialPlatforms = window.ZpropBioModel.socialPlatforms;
   const socialDefaults = ['instagram','facebook','tiktok'];
   const socialPaths = {
@@ -61,15 +71,18 @@
     }).join('');
     return links ? `<nav class="bio-page-social" aria-label="${t('social')}">${links}</nav>` : '';
   }
-  const appearanceKeys = ['background','ink','accent','buttonText','shape'];
+  const appearanceKeys = ['background','ink','accent','buttonText','shape','layout'];
   const templates = [
     {id:'botanical',background:'#f6f5ef',ink:'#203e33',accent:'#203e33',buttonText:'#ffffff',shape:'rounded'},
     {id:'studio',background:'#ffffff',ink:'#202020',accent:'#202020',buttonText:'#ffffff',shape:'square'},
     {id:'midnight',background:'#141b2d',ink:'#f0f2ff',accent:'#bfcaff',buttonText:'#141b2d',shape:'rounded'},
     {id:'rose',background:'#fff1f2',ink:'#652d42',accent:'#9d3e60',buttonText:'#ffffff',shape:'pill'},
     {id:'ocean',background:'#edf8fb',ink:'#174459',accent:'#21647d',buttonText:'#ffffff',shape:'pill'},
-    {id:'sunset',background:'#fff3e5',ink:'#653725',accent:'#a64728',buttonText:'#ffffff',shape:'rounded'}
-  ];
+    {id:'sunset',background:'#fff3e5',ink:'#653725',accent:'#a64728',buttonText:'#ffffff',shape:'rounded'},
+    {id:'poster',background:'#f4ff63',ink:'#171717',accent:'#171717',buttonText:'#f4ff63',shape:'square',layout:'poster'},
+    {id:'event',background:'#211033',ink:'#fff2fa',accent:'#edb7ff',buttonText:'#211033',shape:'pill',layout:'event'},
+    {id:'editorial',background:'#f8f0e5',ink:'#472d26',accent:'#893b2c',buttonText:'#ffffff',shape:'square',layout:'editorial'}
+  ].map(template => ({layout:'classic',...template}));
   const t = key => copy[key]?.[language] || key;
   const label = key => `<span data-bio-copy="${key}">${t(key)}</span>`;
   function shell() {
@@ -86,23 +99,21 @@
   if (!window.ZpropAuth || !await window.ZpropAuth.ready) return;
   document.removeEventListener('zprop:language', shell);
   let nextId = 1, statusKey = '', publishing = false, loading = 0, publishedUrl = '';
-  const state = { schemaVersion:2, background:'#f6f5ef', ink:'#203e33', accent:'#203e33', buttonText:'#ffffff', shape:'rounded', blocks:[{id:nextId++,type:'profile',name:'ZPROP',bio:language ? 'Your story. Your space.' : 'Cerita anda. Ruang anda.',photo:''},{id:nextId++, type:'link', label:language ? 'Visit my website' : 'Lawati laman web saya', url:window.ZPROP_PUBLIC_ORIGIN}] };
-  const blockTypes = ['profile','link','text','heading','image','divider','social'];
-  const icons = {profile:'♙', link:'↗', text:'¶', heading:'T', image:'▧', divider:'—', social:'@'};
+  const state = { schemaVersion:2, background:'#f6f5ef', ink:'#203e33', accent:'#203e33', buttonText:'#ffffff', shape:'rounded', layout:'classic', blocks:[{id:nextId++,type:'profile',name:'ZPROP',bio:language ? 'Your story. Your space.' : 'Cerita anda. Ruang anda.',photo:''},{id:nextId++, type:'link', label:language ? 'Visit my website' : 'Lawati laman web saya', url:window.ZPROP_PUBLIC_ORIGIN}] };
+  const blockTypes = ['profile','link','text','heading','image','divider','social','html'];
+  const icons = {profile:'♙', link:'↗', text:'¶', heading:'T', image:'▧', divider:'—', social:'@',html:'&lt;/&gt;'};
   const field = (key, value, attrs = '') => `<label>${label(key)}<input name="${key}" value="${esc(value)}" ${attrs}></label>`;
   $('#tool-workspace').innerHTML = `<div class="bio-builder"><form id="tool-form" class="tool-editor" novalidate><fieldset id="bio-fields"><h2 class="workspace-title">${label('editor')}</h2>
     <div class="bio-tabs" role="tablist" aria-label="Bio editor"><button type="button" role="tab" id="bio-content-tab" aria-controls="bio-content" aria-selected="true" data-tab="content">${label('content')}</button><button type="button" role="tab" id="bio-appearance-tab" aria-controls="bio-appearance" aria-selected="false" tabindex="-1" data-tab="appearance">${label('appearance')}</button></div>
     <section id="bio-content" role="tabpanel" aria-labelledby="bio-content-tab">
     <div class="bio-block-heading"><div><h3>${label('blocks')}</h3><p class="bio-hint">${label('blocksHelp')}</p></div><button type="button" id="add-block" class="bio-add">+ ${label('add')}</button></div><div id="bio-blocks"></div></section>
-    <section id="bio-appearance" role="tabpanel" aria-labelledby="bio-appearance-tab" hidden><h3>${label('styleTitle')}</h3><p class="bio-hint">${label('styleHelp')}</p><section class="bio-templates" aria-labelledby="bio-templates-title"><h4 id="bio-templates-title">${label('templates')}</h4><p class="bio-hint">${label('templatesHelp')}</p><div id="bio-template-grid" class="bio-template-grid"></div></section><div class="bio-colors">${['background','ink','accent','buttonText'].map(key => field(key,state[key],'type="color"')).join('')}</div><label>${label('buttonStyle')}<select name="shape">${['rounded','square','pill'].map(key => `<option value="${key}" data-bio-copy="${key}">${t(key)}</option>`).join('')}</select></label></section>
-    <div class="bio-publish"><label>${label('slug')}<div class="bio-address"><span>zprop.tech/sites/</span><input name="slug" maxlength="50" pattern="[a-z0-9][a-z0-9-]{1,48}[a-z0-9]" placeholder="my-bio" aria-describedby="bio-slug-help"></div></label><p class="bio-hint" id="bio-slug-help">${label('slugHelp')}</p><div class="tool-actions"><button type="button" data-action="downloadHtml">${label('downloadHtml')}</button><button type="submit" class="primary" id="publish-bio">${label('publish')} ↗</button></div></div></fieldset><p id="tool-status" class="tool-status" role="status" aria-live="polite"></p><section id="bio-result" class="bio-result" hidden><h3>${label('ready')}</h3><a id="bio-url" target="_blank" rel="noopener noreferrer"></a><div class="tool-actions"><a id="open-bio" target="_blank" rel="noopener noreferrer">${label('open')} ↗</a><button type="button" id="copy-bio">${label('copy')}</button></div></section></form>
+    <section id="bio-appearance" role="tabpanel" aria-labelledby="bio-appearance-tab" hidden><h3>${label('styleTitle')}</h3><p class="bio-hint">${label('styleHelp')}</p><section class="bio-templates" aria-labelledby="bio-templates-title"><h4 id="bio-templates-title">${label('templates')}</h4><div id="bio-template-grid" class="bio-template-grid"></div></section><div class="bio-colors">${['background','ink','accent','buttonText'].map(key => field(key,state[key],'type="color"')).join('')}</div><label>${label('buttonStyle')}<select name="shape">${['rounded','square','pill'].map(key => `<option value="${key}" data-bio-copy="${key}">${t(key)}</option>`).join('')}</select></label></section>
+    <div class="bio-publish"><div class="tool-actions"><button type="button" data-action="downloadHtml">${label('downloadHtml')}</button><button type="submit" class="primary" id="publish-bio">${label('publish')} ↗</button></div></div></fieldset><p id="tool-status" class="tool-status" role="status" aria-live="polite"></p><section id="bio-result" class="bio-result" role="status" aria-labelledby="bio-result-title" hidden><div class="bio-published-heading"><span class="bio-published-icon">${outlineIcon('<path d="m5 12 4 4L19 6"/>')}</span><div><span class="bio-published-badge">${label('live')}</span><h3 id="bio-result-title">${label('ready')}</h3><p>${label('readyHelp')}</p></div></div><a id="bio-url" target="_blank" rel="noopener noreferrer"></a><div class="tool-actions"><a id="open-bio" target="_blank" rel="noopener noreferrer">${label('open')} ↗</a><button type="button" id="copy-bio">${label('copy')}</button></div></section></form>
     <aside class="bio-preview-column"><div class="bio-preview-heading"><span class="bio-live-dot"></span><h2>${label('preview')}</h2><span aria-hidden="true">↗</span></div><div class="bio-phone"><div class="bio-phone-camera" aria-hidden="true"></div><div class="bio-phone-screen"><main id="bio-preview" class="bio-document"></main></div></div><p class="bio-hint bio-preview-hint">${label('previewHint')}</p></aside></div>
-    <dialog id="block-picker" class="bio-dialog" aria-labelledby="block-picker-title"><div class="bio-dialog-heading"><h2 id="block-picker-title">${label('choose')}</h2><button type="button" id="close-block-picker">×</button></div><div class="bio-block-types">${blockTypes.map(type => `<button type="button" data-add="${type}"><span class="bio-type-icon" aria-hidden="true">${icons[type]}</span><span><strong>${label(type)}</strong><small>${label(type === 'image' ? 'imageBlockHelp' : type + 'Help')}</small></span><span aria-hidden="true">+</span></button>`).join('')}</div><form id="block-details-form" hidden novalidate><button type="button" id="back-block-picker" class="bio-text-button">${label('back')}</button><h3 id="block-details-type"></h3><p class="bio-hint">${label('detailsHelp')}</p><fieldset id="block-details-fields"></fieldset><p id="block-details-status" class="tool-status" role="status"></p><button type="submit" id="confirm-add-block" class="bio-add bio-full-button">${label('add')}</button></form></dialog>`;
+    <dialog id="block-picker" class="bio-dialog" aria-labelledby="block-picker-title"><div class="bio-dialog-heading"><h2 id="block-picker-title">${label('choose')}</h2><button type="button" id="close-block-picker">${closeIcon}</button></div><div class="bio-block-types">${blockTypes.map(type => `<button type="button" data-add="${type}"><span class="bio-type-icon" aria-hidden="true">${icons[type]}</span><span><strong>${label(type)}</strong><small>${label(type === 'image' ? 'imageBlockHelp' : type + 'Help')}</small></span><span aria-hidden="true">+</span></button>`).join('')}</div><form id="block-details-form" hidden novalidate><button type="button" id="back-block-picker" class="bio-text-button">${label('back')}</button><h3 id="block-details-type"></h3><p class="bio-hint">${label('detailsHelp')}</p><fieldset id="block-details-fields"></fieldset><p id="block-details-status" class="tool-status" role="status"></p><button type="submit" id="confirm-add-block" class="bio-add bio-full-button">${label('add')}</button></form></dialog>`;
   const form = $('#tool-form');
-  form.elements.slug.required=true;
   $('[data-action=downloadHtml]').insertAdjacentHTML('afterend',`<button type="button" id="save-bio-draft">${label('saveDraft')}</button>`);
   $('#bio-blocks').insertAdjacentHTML('afterend','<p id="bio-reorder-status" class="bio-sr-only" role="status"></p>');
-  $('.bio-address > span').textContent = publishBase.host + '/sites/';
   function status(key, error = false) { statusKey = key; $('#tool-status').textContent = key ? t(key) : ''; $('#tool-status').classList.toggle('is-error', error); }
   function changed() { library.changed(); status(''); renderPreview(); }
   function validUrl(value) { try { const url = new URL(value); return ['http:','https:'].includes(url.protocol) && !!url.hostname && !url.username && !url.password; } catch { return false; } }
@@ -119,7 +130,16 @@
     button.textContent=collapse?'+':'−';
   }
   function controls(block, index) {
-    return `<div class="bio-block-controls"><button type="button" data-block-action="minimize" aria-expanded="${!minimized.has(block.id)}" aria-controls="bio-block-fields-${block.id}" aria-label="${t(minimized.has(block.id)?'expand':'minimize')}" title="${t(minimized.has(block.id)?'expand':'minimize')}">${minimized.has(block.id)?'+':'−'}</button><button type="button" class="bio-status-toggle" data-block-action="toggle" role="switch" aria-checked="${block.enabled!==false}" aria-label="${t('blockStatus')}: ${t(block.type)} ${index+1}" title="${t('statusHelp')}"><span class="bio-switch-track" aria-hidden="true"></span><span>${t(block.enabled===false?'disabled':'enabled')}</span></button>${[['duplicate','⧉'],['remove','×']].map(([action,icon]) => `<button type="button" data-block-action="${action}" ${action==='duplicate' && block.type==='social'?'disabled':''} aria-label="${t(action)}" title="${t(action)}">${icon}</button>`).join('')}</div>`;
+    return `<div class="bio-block-controls"><button type="button" data-block-action="minimize" aria-expanded="${!minimized.has(block.id)}" aria-controls="bio-block-fields-${block.id}" aria-label="${t(minimized.has(block.id)?'expand':'minimize')}" title="${t(minimized.has(block.id)?'expand':'minimize')}">${minimized.has(block.id)?'+':'−'}</button><button type="button" class="bio-status-toggle" data-block-action="toggle" role="switch" aria-checked="${block.enabled!==false}" aria-label="${t('blockStatus')}: ${t(block.type)} ${index+1}" title="${t('statusHelp')}"><span class="bio-switch-track" aria-hidden="true"></span><span>${t(block.enabled===false?'disabled':'enabled')}</span></button>${[['duplicate',duplicateIcon],['remove',closeIcon]].map(([action,icon]) => `<button type="button" data-block-action="${action}" ${action==='duplicate' && block.type==='social'?'disabled':''} aria-label="${t(action)}" title="${t(action)}">${icon}</button>`).join('')}</div>`;
+  }
+  function htmlFields(block = {}, editing = false) {
+    const attr = key => editing ? 'data-key="'+key+'"' : 'name="'+key+'"';
+    return `<p class="bio-hint">${label('htmlNote')}</p><label>${label('htmlCode')}<textarea class="bio-code-input" ${attr('html')} maxlength="20000" rows="9" spellcheck="false" required>${esc(block.html || '')}</textarea></label><label>${label('htmlTitle')}<input ${attr('title')} maxlength="100" value="${esc(block.title || '')}"></label><label>${label('htmlHeight')}<input ${attr('height')} type="number" min="80" max="1600" step="1" value="${esc(block.height ?? 240)}" required></label>`;
+  }
+  function customHtml(block) {
+    const height = Math.max(80,Math.min(1600,Number(block.height) || 240));
+    const source = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; font-src https: data:; script-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><style>html{color:${state.ink};font-family:Arial,sans-serif;overflow-wrap:anywhere}body{margin:0}img{max-width:100%;height:auto}a{color:inherit}</style></head><body>${block.html || ''}</body></html>`;
+    return `<iframe class="bio-custom-html" title="${esc(block.title || t('html'))}" sandbox="allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" height="${height}" srcdoc="${esc(source)}"></iframe>`;
   }
   function renderBlocks() {
     $('#bio-blocks').innerHTML = state.blocks.length ? state.blocks.map((block,index) => {
@@ -129,6 +149,7 @@
       if (block.type === 'link') fields = input('label','maxlength="100" required') + input('url','type="url" placeholder="https://" maxlength="4096" required');
       if (['text','heading'].includes(block.type)) fields = block.type === 'text' ? `<label>${label('text')}<textarea data-key="text" maxlength="3000" required>${esc(block.text || '')}</textarea></label>` : input('heading','maxlength="200" required');
       if (block.type === 'image') fields = `<label>${label('imageFile')}<input type="file" data-key="image" accept="image/png,image/jpeg,image/webp,image/gif"></label><p class="bio-hint">${label('imageHelp')}</p><img class="bio-image-thumb" ${block.src ? `src="${block.src}"` : 'hidden'} alt="">` + input('alt','maxlength="200"') + input('caption','maxlength="300"');
+      if (block.type === 'html') fields = htmlFields(block,true);
       if (block.type === 'social') fields = socialFields(block,true);
       if (block.type === 'divider') fields = `<p class="bio-hint">${label('dividerNote')}</p>`;
       return `<article class="bio-block" data-block-id="${block.id}" data-block-type="${block.type}"><div class="bio-block-top"><button type="button" class="bio-drag-handle" aria-label="${t('drag')}" title="${t('drag')}">⠿</button><span class="bio-block-number">${String(index+1).padStart(2,'0')}</span><h4>${icons[block.type]} ${t(block.type)}</h4>${controls(block,index)}</div><div class="bio-block-fields" id="bio-block-fields-${block.id}" ${minimized.has(block.id)?'hidden':''}>${fields}</div></article>`;
@@ -147,25 +168,28 @@
       if (block.type === 'link') return `<a class="bio-page-link" ${validUrl(block.url)?`href="${esc(block.url)}" target="_blank" rel="noopener noreferrer"`:''}>${esc(block.label || t('link'))}<span aria-hidden="true">↗</span></a>`;
       if (block.type === 'heading') return `<h2 class="bio-page-heading">${esc(block.heading || t('heading'))}</h2>`;
       if (block.type === 'text') return `<p class="bio-page-text">${esc(block.text || t('text'))}</p>`;
+      if (block.type === 'html') return customHtml(block);
       if (block.type === 'divider') return '<hr class="bio-page-divider">';
       if (block.type === 'image') return `<figure class="bio-page-image">${block.src ? `<img src="${block.src}" alt="${esc(block.alt || '')}">` : `<div class="bio-image-placeholder">▧<span>${t('previewImage')}</span></div>`}${block.caption?`<figcaption>${esc(block.caption)}</figcaption>`:''}</figure>`;
       return '';
     }).join('')}</div>${socialMarkup(preview)}<footer class="bio-page-footer">Made with <a href="${window.ZPROP_PUBLIC_ORIGIN}" target="_blank" rel="noopener noreferrer">ZPROP.</a></footer>`;
   }
   const pageStyles = `.bio-document{box-sizing:border-box;background:var(--bio-bg);color:var(--bio-ink);font-family:Arial,sans-serif;font-size:14px;line-height:1.6;padding:40px 24px 24px;overflow-wrap:anywhere;min-height:100%}.bio-document *{box-sizing:border-box}.bio-document h2,.bio-document h3,.bio-document p,.bio-document figure{margin:0}.bio-page-profile{text-align:center;padding:8px 0}.bio-avatar-image,.bio-avatar-letter{display:block;width:88px;height:88px;border-radius:50%;margin:0 auto 17px;object-fit:cover}.bio-avatar-letter{display:grid;place-items:center;background:var(--bio-accent);color:var(--bio-button-text);font-size:34px}.bio-document .bio-page-profile h3{font-size:25px;font-weight:700;line-height:1.25;margin-bottom:10px;color:inherit}.bio-page-profile p{white-space:pre-wrap;font-size:13px;opacity:.85}.bio-page-blocks{display:flex;flex-direction:column;gap:16px}.bio-document .bio-page-link{display:flex;align-items:center;justify-content:center;gap:12px;position:relative;background:var(--bio-accent);color:var(--bio-button-text);border-radius:var(--bio-radius);padding:15px 32px;text-decoration:none;min-height:50px;font-weight:600;font-size:13px}.bio-page-link>span{position:absolute;right:14px}.bio-page-heading{font-size:20px;font-weight:700;text-align:center;line-height:1.4}.bio-page-text{white-space:pre-wrap;text-align:center}.bio-page-divider{width:100%;border:0;border-top:1px solid currentColor;opacity:.22;margin:6px 0}.bio-page-image img{display:block;max-width:100%;width:100%;height:auto;border-radius:12px}.bio-page-image figcaption{font-size:12px;text-align:center;margin-top:8px;white-space:pre-wrap}.bio-image-placeholder{display:grid;place-content:center;min-height:150px;border:1px dashed currentColor;border-radius:12px;text-align:center;font-size:32px;opacity:.65}.bio-image-placeholder span{font-size:12px}.bio-page-footer{text-align:center;font-size:10px;margin-top:34px;opacity:.65}.bio-page-footer a{color:inherit;font-weight:700;text-decoration:none}.bio-page-social{display:flex;justify-content:center;gap:14px;margin:28px 0 0}.bio-document .bio-social-circle{display:grid;place-items:center;flex-shrink:0;width:44px;height:44px;padding:11px;border:1px solid transparent;border-radius:50%;background:var(--bio-accent);color:var(--bio-button-text);text-decoration:none;cursor:pointer}.bio-social-circle svg{display:block;width:20px;height:20px}.bio-social-circle:hover{opacity:.8}.bio-social-circle:focus-visible{outline:2px solid var(--bio-ink);outline-offset:4px}.bio-document .bio-social-empty{border:1px dashed currentColor;background:transparent;color:var(--bio-ink);opacity:.6}`;
-  const previewStyles = document.createElement('style'); previewStyles.textContent = pageStyles; document.head.append(previewStyles);
+  const layoutStyles = `.bio-custom-html{display:block;width:100%;border:0;background:transparent}.bio-document[data-layout=poster]{background-image:linear-gradient(135deg,transparent 72%,#0000000a 72%);border-top:12px solid var(--bio-accent)}.bio-document[data-layout=poster] .bio-page-profile{text-align:left;border-bottom:3px solid currentColor;padding-bottom:24px}.bio-document[data-layout=poster] .bio-avatar-image,.bio-document[data-layout=poster] .bio-avatar-letter{margin-left:0;border-radius:4px}.bio-document[data-layout=poster] .bio-page-profile h3{font-size:42px;text-transform:uppercase;font-weight:900;letter-spacing:-2px;line-height:1.05}.bio-document[data-layout=poster] .bio-page-heading{text-align:left;font-size:30px;text-transform:uppercase}.bio-document[data-layout=poster] .bio-page-text{text-align:left}.bio-document[data-layout=poster] .bio-page-link{box-shadow:4px 4px 0 var(--bio-ink);border:1px solid var(--bio-bg);margin-right:4px}.bio-document[data-layout=event]{background-image:radial-gradient(ellipse at top right,#edb7ff33,transparent 55%),radial-gradient(ellipse at bottom left,#7856ff44,transparent 60%)}.bio-document[data-layout=event] .bio-page-profile{padding:25px 12px;border:1px solid #ffffff33;border-radius:100px 100px 16px 16px}.bio-document[data-layout=event] .bio-avatar-image,.bio-document[data-layout=event] .bio-avatar-letter{outline:1px solid var(--bio-accent);outline-offset:6px}.bio-document[data-layout=event] .bio-page-profile h3{font-size:32px;letter-spacing:-1px}.bio-document[data-layout=event] .bio-page-heading{text-transform:uppercase;letter-spacing:3px;font-size:17px}.bio-document[data-layout=event] .bio-page-link{border:1px solid #ffffff44;box-shadow:0 5px 24px #0002}.bio-document[data-layout=editorial]{font-family:Georgia,serif;border:10px double var(--bio-accent)}.bio-document[data-layout=editorial] .bio-page-profile{border-bottom:1px solid currentColor;padding-bottom:24px}.bio-document[data-layout=editorial] .bio-page-profile h3{font-family:Georgia,serif;font-size:36px;font-weight:400;font-style:italic}.bio-document[data-layout=editorial] .bio-avatar-image,.bio-document[data-layout=editorial] .bio-avatar-letter{border-radius:50% 50% 4px 4px;width:100px;height:120px}.bio-document[data-layout=editorial] .bio-page-heading{font-family:Georgia,serif;font-weight:400;font-size:28px}.bio-document[data-layout=editorial] .bio-page-link{background:transparent;color:var(--bio-ink);border-top:1px solid currentColor;border-bottom:1px solid currentColor;font-family:Arial,sans-serif}`;
+  const previewStyles = document.createElement('style'); previewStyles.textContent = pageStyles + layoutStyles; document.head.append(previewStyles);
   function variables() { return `--bio-bg:${state.background};--bio-ink:${state.ink};--bio-accent:${state.accent};--bio-button-text:${state.buttonText};--bio-radius:${{rounded:'12px',square:'2px',pill:'40px'}[state.shape]}`; }
   function renderTemplates() {
-    $('#bio-template-grid').innerHTML = templates.map(template => `<button type="button" class="bio-template" data-template="${template.id}" aria-pressed="${appearanceKeys.every(key => state[key] === template[key])}"><span class="bio-template-sample" aria-hidden="true" style="--sample-bg:${template.background};--sample-ink:${template.ink};--sample-accent:${template.accent};--sample-button-text:${template.buttonText};--sample-radius:${{rounded:'6px',square:'1px',pill:'20px'}[template.shape]}"><span class="bio-template-avatar">A</span><span class="bio-template-line"></span><span class="bio-template-link">Aa</span><span class="bio-template-link">Aa</span><span class="bio-template-social">${socialDefaults.map(platform => `<span>${socialIcon(platform)}</span>`).join('')}</span></span><span>${t(template.id)}</span></button>`).join('');
+    $('#bio-template-grid').innerHTML = templates.map(template => `<button type="button" class="bio-template" data-template="${template.id}" aria-pressed="${appearanceKeys.every(key => state[key] === template[key])}"><span class="bio-template-sample" aria-hidden="true" style="--sample-bg:${template.background};--sample-ink:${template.ink};--sample-accent:${template.accent};--sample-button-text:${template.buttonText};--sample-radius:${{rounded:'6px',square:'1px',pill:'20px'}[template.shape]}"><span class="bio-template-avatar">${template.layout==='classic'?'A':esc(t(template.id))}</span><span class="bio-template-line"></span><span class="bio-template-link">Aa</span><span class="bio-template-link">Aa</span><span class="bio-template-social">${socialDefaults.map(platform => `<span>${socialIcon(platform)}</span>`).join('')}</span></span><span>${t(template.id)}</span></button>`).join('');
   }
   $('#bio-template-grid').addEventListener('click', event => {
     const template = templates.find(item => item.id === event.target.closest('[data-template]')?.dataset.template);
     if (!template || publishing) return;
-    for (const key of appearanceKeys) { state[key] = template[key]; form.elements[key].value = template[key]; }
+    for (const key of appearanceKeys) { state[key] = template[key]; if(form.elements[key])form.elements[key].value = template[key]; }
     changed();
     $('#bio-template-grid [data-template="'+template.id+'"]').focus();
   });
   function renderPreview() {
+    $('#bio-preview').dataset.layout = state.layout || 'classic';
     $('#bio-preview').style.cssText = variables(); $('#bio-preview').innerHTML = markup(true);
     renderProfileThumbs(); renderTemplates();
   }
@@ -221,13 +245,14 @@
     $('.bio-block-types').hidden = true; detailsForm.hidden = false;
     $('#block-picker-title').innerHTML = label('blockDetails');
     $('#block-details-type').innerHTML = label(type);
-    const input = (key, attrs = '') => `<label>${label(key)}<input name="${key}" ${attrs} required></label>`;
+    const input = (key, attrs = '', required = true) => `<label>${label(key)}<input name="${key}" ${attrs} ${required?'required':''}></label>`;
     let fields = '';
-    if (type === 'profile') fields = input('name','maxlength="100" autocomplete="name"');
+    if (type === 'profile') fields = input('photo','type="file" accept="image/png,image/jpeg,image/webp,image/gif"',false) + `<p class="bio-hint">${label('imageHelp')}</p>` + input('name','maxlength="100" autocomplete="name"') + `<label>${label('bio')}<textarea name="bio" maxlength="1000"></textarea></label>`;
     if (type === 'link') fields = input('label','maxlength="100"') + input('url','type="url" placeholder="https://" maxlength="4096"');
     if (type === 'text') fields = `<label>${label('text')}<textarea name="text" maxlength="3000" required></textarea></label>`;
     if (type === 'heading') fields = input('heading','maxlength="200"');
-    if (type === 'image') fields = input('imageFile','type="file" accept="image/png,image/jpeg,image/webp,image/gif"') + `<p class="bio-hint">${label('imageHelp')}</p>`;
+    if (type === 'image') fields = input('imageFile','type="file" accept="image/png,image/jpeg,image/webp,image/gif"') + `<p class="bio-hint">${label('imageHelp')}</p>` + input('alt','maxlength="200"',false) + input('caption','maxlength="300"',false);
+    if (type === 'html') fields = htmlFields();
     if (type === 'social') fields = socialFields();
     if (type === 'divider') fields = `<p class="bio-hint">${label('dividerNote')}</p>`;
     $('#block-details-fields').innerHTML = fields;
@@ -244,17 +269,18 @@
     if (!detailsForm.reportValidity()) return;
     const block = {type:draft.type};
     for (const input of detailsForm.querySelectorAll('input:not([type=file]),textarea,select')) block[input.name] = input.value.trim();
-    if (draft.type === 'profile') Object.assign(block,{bio:'',photo:''});
-    if (draft.type === 'image') {
-      const file = detailsForm.elements.imageFile.files[0];
+    if (draft.type === 'html') block.height = Number(block.height);
+    if (draft.type === 'profile') block.photo = '';
+    const file = detailsForm.querySelector('input[type=file]')?.files[0];
+    if (file) {
+      const imageKey = draft.type === 'profile' ? 'photo' : 'src';
       $('#confirm-add-block').disabled = true; $('#block-details-fields').disabled = true;
       $('#block-details-status').textContent = t('imageLoading');
       try {
-        block.src = await readImage(file);
+        block[imageKey] = await readImage(file);
         if (pendingBlock !== draft) return;
-        const total = state.blocks.reduce((sum,item) => sum + imageBytes(item.type === 'profile' ? item.photo : item.src),imageBytes(block.src));
+        const total = state.blocks.reduce((sum,item) => sum + imageBytes(item.type === 'profile' ? item.photo : item.src),imageBytes(block[imageKey]));
         if (total > 20*1024*1024) throw new Error('imageTotal');
-        Object.assign(block,{alt:'',caption:''});
       } catch (error) {
         if (pendingBlock === draft) $('#block-details-status').textContent = t(copy[error.message] ? error.message : 'imageError');
         return;
@@ -285,7 +311,7 @@
   form.addEventListener('input', event => {
     const input = event.target; if (input.type === 'file') return;
     input.setCustomValidity?.('');
-    if (input.dataset.key) { const block = state.blocks.find(item => item.id === Number(input.closest('[data-block-id]').dataset.blockId)); block[input.dataset.key] = input.value; }
+    if (input.dataset.key) { const block = state.blocks.find(item => item.id === Number(input.closest('[data-block-id]').dataset.blockId)); block[input.dataset.key] = input.type === 'number' ? Number(input.value) : input.value; }
     else if (Object.hasOwn(state,input.name) && !['photo','blocks'].includes(input.name)) state[input.name] = input.value;
     changed();
   });
@@ -317,7 +343,6 @@
   function validate() {
     if (loading) { status('imageLoading',true); return false; }
     for (const input of form.querySelectorAll('input[type=url]')) input.setCustomValidity((!input.required && !input.value.trim()) || validUrl(input.value) ? '' : t('invalidUrl'));
-    form.elements.slug.setCustomValidity(form.elements.slug.value && !/^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/.test(form.elements.slug.value) ? t('slugError') : '');
     for (const input of form.querySelectorAll('input,textarea,select')) {
       const blockId = input.closest('[data-block-id]')?.dataset.blockId;
       if (blockId && state.blocks.find(block => block.id === Number(blockId))?.enabled === false) continue;
@@ -328,7 +353,7 @@
     if (state.blocks.reduce((sum,block)=>sum+imageBytes(block.type === 'profile' ? block.photo : block.src),0)>20*1024*1024) { status('imageTotal',true); return false; }
     return true;
   }
-  function documentHtml() { const profile = state.blocks.find(block => block.type === 'profile' && block.enabled !== false); return `<!DOCTYPE html><html lang="${language?'en':'ms'}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${esc(profile?.bio || '')}"><title>${esc(profile?.name || form.elements.slug.value || 'Bio page')} — ZPROP</title><style>${pageStyles}html{height:100%;background:${state.background}}body{margin:0;min-height:100%;${variables()}}.bio-document{max-width:520px;margin:auto;min-height:100vh}</style></head><body><main class="bio-document">${markup()}</main></body></html>`; }
+  function documentHtml() { const profile = state.blocks.find(block => block.type === 'profile' && block.enabled !== false); return `<!DOCTYPE html><html lang="${language?'en':'ms'}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${esc(profile?.bio || '')}"><title>${esc(profile?.name || library.active?.slug || 'Bio page')} — ZPROP</title><style>${pageStyles}${layoutStyles}html{height:100%;background:${state.background}}body{margin:0;min-height:100%;${variables()}}.bio-document{max-width:520px;margin:auto;min-height:100vh}</style></head><body><main class="bio-document" data-layout="${state.layout || 'classic'}">${markup()}</main></body></html>`; }
   $('[data-action=downloadHtml]').addEventListener('click', () => {
     if (!validate()) return;
     try { const url = URL.createObjectURL(new Blob([documentHtml()],{type:'text/html;charset=utf-8'})); const a = document.createElement('a'); a.href=url; a.download='zprop-page.html'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); status('saved'); } catch { status('downloadError',true); }
@@ -336,13 +361,12 @@
   function publishLabel() { $('#publish-bio').firstElementChild.textContent=t(library.active?.published?'saveChanges':'publish'); }
   async function savePage(publish) {
     if (publishing || loading || (publish && !validate())) return;
-    if (!form.elements.slug.reportValidity()) return;
     publishing=true; $('#bio-fields').disabled=true; $('#publish-bio').firstElementChild.textContent=t('publishing'); status(''); $('#bio-result').hidden=true;
     try {
-      const result = await library.save({slug:form.elements.slug.value,state,html:publish?documentHtml():undefined,publish});
+      const result = await library.save({state,html:publish?documentHtml():undefined,publish});
       if (!/^\/sites\/[a-z0-9-]{3,50}\/$/.test(result.url)) throw new Error('server');
       publishedUrl = new URL(result.url,publishBase).href;
-      $('#bio-url').href=publishedUrl; $('#bio-url').textContent=publishedUrl; $('#open-bio').href=publishedUrl; $('#bio-result').hidden=!result.published; status(publish?'ready':'draftSaved');
+      $('#bio-url').href=publishedUrl; $('#bio-url').textContent=publishedUrl; $('#open-bio').href=publishedUrl; $('#bio-result').hidden=!result.published; status(publish?'':'draftSaved');
     } catch (error) { status(['taken','busy','notFound','conflict','invalidUrl','imageTotal'].includes(error.message)?error.message:'server',true); }
     finally { publishing=false; $('#bio-fields').disabled=false; publishLabel(); }
   }
@@ -358,8 +382,8 @@
     minimized.clear();
     Object.assign(state,window.ZpropBioModel.upgrade(record.state));nextId=Math.max(0,...state.blocks.map(block=>block.id))+1;
     state.blocks.forEach(block => minimized.add(block.id));
-    for(const key of appearanceKeys)form.elements[key].value=state[key];
-    form.elements.slug.value=record.slug;form.querySelectorAll('input,textarea').forEach(input=>input.setCustomValidity(''));
+    for(const key of appearanceKeys)if(form.elements[key])form.elements[key].value=state[key];
+    form.querySelectorAll('input,textarea').forEach(input=>input.setCustomValidity(''));
     renderBlocks();renderPreview();tab('content');status('');publishLabel();
     publishedUrl=new URL(record.url,publishBase).href;
     $('#bio-url').href=publishedUrl;$('#bio-url').textContent=publishedUrl;$('#open-bio').href=publishedUrl;$('#bio-result').hidden=!record.published;

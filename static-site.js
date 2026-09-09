@@ -87,7 +87,7 @@
     if (mode === 'upload' && !/\.(html|zip)$/i.test(file.name)) return status('fileType', true);
     const type = mode === 'upload' && /\.zip$/i.test(file.name) ? 'zip' : 'html';
     const endpoint = new URL('api/static-sites', base); endpoint.searchParams.set('type', type); endpoint.searchParams.set('slug', form.elements.slug.value.trim());
-    busy = true; form.setAttribute('aria-busy', 'true'); $('#create-site').disabled = true; $('#create-site').firstElementChild.textContent = t('creating'); status(''); $('#site-result').hidden = true;
+    busy = true; for(const control of form.querySelectorAll('input,textarea,button'))control.disabled=true; form.setAttribute('aria-busy', 'true'); $('#create-site').disabled = true; $('#create-site').firstElementChild.textContent = t('creating'); status(''); $('#site-result').hidden = true;
     try {
       let response;
       try { response = await window.ZpropAuth.fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/octet-stream'}, body }); }
@@ -100,9 +100,9 @@
       siteUrl = new URL(result.url, publicBase).href;
       $('#site-url').href = siteUrl; $('#site-url').textContent = siteUrl; $('#open-site').href = siteUrl; $('#site-result').hidden = false;
       showPreview(); $('#html-preview').removeAttribute('srcdoc'); $('#html-preview').setAttribute('sandbox', 'allow-scripts'); $('#html-preview').src = new URL(result.url, base).href;
-      status('ready');
+      status('ready');library.saved();
     } catch (error) { status(copy[error.message] ? error.message : 'server', true); }
-    finally { busy = false; form.removeAttribute('aria-busy'); $('#create-site').disabled = false; $('#create-site').firstElementChild.textContent = t('create'); }
+    finally { busy = false; for(const control of form.querySelectorAll('input,textarea,button'))control.disabled=false; form.removeAttribute('aria-busy'); $('#create-site').disabled = false; $('#create-site').firstElementChild.textContent = t('create'); }
   });
   $('#copy-site').addEventListener('click', async () => { try { await navigator.clipboard.writeText(siteUrl); status('copied'); } catch { status('copyFail'); } });
   function localizeShell() {
@@ -122,5 +122,10 @@
     $('#html-preview').title = language ? 'HTML preview' : 'Pratonton HTML';
   }
   document.addEventListener('zprop:language', localize); localize();
+  const library=window.ZpropItemLibrary.mount({category:'host-html',onCreate(){
+    form.reset();form.elements.slug.setCustomValidity('');switchMode('upload');status('');siteUrl='';
+    $('#site-result').hidden=true;$('#html-preview').hidden=true;$('#preview-empty').hidden=false;
+    $('#html-preview').removeAttribute('src');$('#html-preview').removeAttribute('srcdoc');$('#html-preview').setAttribute('sandbox','');
+  }});
   window.ZpropNavigation?.ready();
 })();

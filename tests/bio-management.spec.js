@@ -1,7 +1,7 @@
 const {test,expect}=require('./auth-fixture');
 const {createBio,expandBlocks,addBlock}=require('./bio-helper');
 const unique=()=> 'managed-'+require('node:crypto').randomBytes(5).toString('hex');
-test('requires a name, saves pages, updates the same live link, renames and deletes',async({page,request,baseURL,browser},info)=>{
+test('requires a name, saves pages, updates the same live link, keeps names immutable and deletes',async({page,request,baseURL,browser},info)=>{
   await page.goto('/tools/bio-pages.html?lang=en');
   await expect(page.locator('#tool-form')).toBeHidden();
   await page.locator('#new-bio').click();
@@ -35,16 +35,17 @@ test('requires a name, saves pages, updates the same live link, renames and dele
   await page.locator('#publish-bio').click();await expect(page.locator('#bio-dirty')).toBeHidden();
   await expect(page.locator('#bio-url')).toHaveText(`${baseURL}/sites/${slug}/`);
   expect(await (await request.get(`/sites/${slug}/`)).text()).toContain('Updated studio');
-  const renamed=unique();await page.locator('[name=slug]').fill(renamed);await page.locator('#publish-bio').click();
-  await expect(page.locator('#bio-url')).toHaveText(`${baseURL}/sites/${renamed}/`);
-  expect((await request.get(`/sites/${slug}/`)).status()).toBe(404);
-  expect((await request.get(`/sites/${renamed}/`)).status()).toBe(200);
-  await page.locator('#back-bio-list').click();await page.locator(`[data-page-slug="${renamed}"] [data-page-action=delete]`).click();
-  await expect(page.locator('#delete-bio-name')).toContainText(renamed);
-  await page.locator('#cancel-delete-bio').click();expect((await request.get(`/sites/${renamed}/`)).status()).toBe(200);
-  await page.locator(`[data-page-slug="${renamed}"] [data-page-action=delete]`).click();await page.locator('#confirm-delete-bio').click();
+  await expect(page.locator('#tool-form [name=slug]')).toHaveCount(0);
+  const record=await (await request.get('/api/bio-pages/'+slug)).json();
+  const rename=await request.put('/api/bio-pages/'+slug,{data:{...record,slug:unique(),publish:false}});
+  expect(rename.status()).toBe(400);expect(await rename.json()).toEqual({error:'slugLocked'});
+  expect((await request.get('/sites/'+slug+'/')).status()).toBe(200);
+  await page.locator('#back-bio-list').click();await page.locator(`[data-page-slug="${slug}"] [data-page-action=delete]`).click();
+  await expect(page.locator('#delete-bio-name')).toContainText(slug);
+  await page.locator('#cancel-delete-bio').click();expect((await request.get(`/sites/${slug}/`)).status()).toBe(200);
+  await page.locator(`[data-page-slug="${slug}"] [data-page-action=delete]`).click();await page.locator('#confirm-delete-bio').click();
   await expect(page.locator('[data-page-slug]')).toHaveCount(0);
-  expect((await request.get(`/sites/${renamed}/`)).status()).toBe(404);
+  expect((await request.get(`/sites/${slug}/`)).status()).toBe(404);
   await page.reload();await expect(page.locator('.bio-library-empty')).toBeVisible();
 });
 test('ownership, unique names and revision checks protect saved pages',async({page,request,browser,baseURL})=>{
@@ -66,7 +67,7 @@ test('ownership, unique names and revision checks protect saved pages',async({pa
     const conflict=unique();const latest=await updated.json();
     const claims=await Promise.all([request.post(`/api/static-sites?type=html&slug=${conflict}`,{data:'<h1>Static</h1>'}),request.post('/api/bio-pages',{data:{slug:conflict,state:record.state}})]);
     expect(claims.map(result=>result.status()).sort()).toEqual([201,409]);
-    expect((await request.put(`/api/bio-pages/${slug}`,{data:{...latest,slug:conflict,publish:false}})).status()).toBe(409);
+    expect((await request.put(`/api/bio-pages/${slug}`,{data:{...latest,slug:conflict,publish:false}})).status()).toBe(400);
     expect((await request.get(`/api/bio-pages/${slug}`)).status()).toBe(200);
     expect((await request.get(`/sites/${slug}/.bio.json`)).status()).toBe(404);
   }finally{await other.close();}

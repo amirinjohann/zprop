@@ -68,7 +68,7 @@ test('appearance templates preview, customize, localize and survive saving and p
   const slug=await createBio(page);
   const original=await page.locator('.bio-page-blocks').innerHTML();
   await page.locator('[data-tab=appearance]').click();
-  await expect(page.locator('[data-template]')).toHaveCount(6);
+  await expect(page.locator('[data-template]')).toHaveCount(9);
   await expect(page.locator('[data-template=botanical]')).toHaveAttribute('aria-pressed','true');
   await page.locator('[data-template=rose]').focus();await page.keyboard.press('Enter');
   await expect(page.locator('[data-template=rose]')).toBeFocused();

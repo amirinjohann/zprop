@@ -9,9 +9,9 @@ async function add(page, type) {
 }
 test('blocks and images update the preview and export a complete publishable page', async ({page, request, baseURL}, info) => {
   const errors=[]; page.on('pageerror',error=>errors.push(error.message));
-  await createBio(page);
+  const slug=await createBio(page);
   await expandBlocks(page);
-  await expect(page.locator('#tool-form .bio-address > span')).toHaveText(new URL(baseURL).host + '/sites/');
+  await expect(page.locator('#tool-form [name=slug]')).toHaveCount(0);
   await page.locator('[name=name]').fill('Aina Studio');
   await page.locator('[name=bio]').fill('Design, photography & everyday inspiration.');
   await page.locator('[name=photo]').setInputFiles(path.resolve('assets/zprop-tech-logo.png'));
@@ -45,9 +45,8 @@ test('blocks and images update the preview and export a complete publishable pag
   expect(html).toContain('https://example.com/portfolio');
   expect(html).toContain('My latest project');
   expect(html).not.toContain('data-key=');
-  const slug='bio-'+require('node:crypto').randomBytes(6).toString('hex');
-  await page.locator('[name=slug]').fill(slug);
   await page.locator('#publish-bio').click();
+  await expect(page.locator('#bio-result')).toBeVisible();
   await expect(page.locator('#bio-url')).toHaveText(`${baseURL}/sites/${slug}/`);
   const response=await request.get(`/sites/${slug}/`);
   expect(response.status()).toBe(200);expect(await response.text()).toBe(html);

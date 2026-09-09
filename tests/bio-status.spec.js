@@ -34,7 +34,7 @@ test('each block status survives saving and controls preview, exports and publis
   await page.reload();await expect(profile.getByRole('switch')).toBeChecked();
   await page.locator('[data-language=ms]').click();await expect(profile.getByRole('switch')).toContainText('Aktif');
   await page.locator('[data-language=en]').click();await expect(profile.getByRole('switch')).toContainText('On');
-  await page.locator('#publish-bio').click();await expect(page.locator('#tool-status')).toHaveText('Your bio page is published');
+  await page.locator('#publish-bio').click();await expect(page.locator('#bio-result')).toBeVisible();
   expect(await (await request.get('/sites/'+slug+'/')).text()).toContain('Hidden profile name');
   const link=page.locator('[data-block-type=link]');await link.getByRole('switch').click();
   await page.locator('#publish-bio').click();expect(await page.locator('[data-key=url]').evaluate(el=>el.validity.valid)).toBe(false);

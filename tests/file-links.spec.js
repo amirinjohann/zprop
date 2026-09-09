@@ -20,7 +20,7 @@ const xlsx=()=>Buffer.from(zipSync({
 
 test('PDF upload creates a named link with exact bytes, inline viewing and download',async({page,request},info)=>{
   const slug=name(),bytes=pdf();
-  await page.goto('/tools/transfer-files.html?lang=en');
+  await page.goto('/tools/transfer-files.html?lang=en');await page.locator('#new-item').click();
   await expect(page.locator('.tools-sidebar [aria-current=page]')).toContainText('File link');
   await page.locator('[name=files]').setInputFiles({name:'Résumé report.pdf',mimeType:'application/pdf',buffer:bytes});
   await page.locator('[name=slug]').fill(slug);
@@ -41,7 +41,7 @@ test('PDF upload creates a named link with exact bytes, inline viewing and downl
 });
 
 test('Excel upload generates a random link and downloads the original workbook',async({page,request})=>{
-  const bytes=xlsx();await page.goto('/tools/transfer-files.html?lang=en');
+  const bytes=xlsx();await page.goto('/tools/transfer-files.html?lang=en');await page.locator('#new-item').click();
   await page.locator('[name=files]').setInputFiles({name:'Budget.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:bytes});
   await page.locator('[data-action=createFileLink]').click();await expect(page.locator('#file-result')).toBeVisible();
   const link=await page.locator('#file-address').getAttribute('href');const response=await request.get(new URL(link).pathname);
@@ -73,7 +73,7 @@ test('invalid files release names, and upload errors remain recoverable',async({
   expect((await request.post(`/api/file-links?name=good.pdf&slug=${slug}`,{data:pdf()})).status()).toBe(201);
   expect((await request.post('/api/file-links?name=good.pdf&slug=TOOLS',{data:pdf()})).status()).toBe(400);
   expect((await request.post('/api/file-links?name=good.pdf',{data:pdf(),headers:{Origin:'null'}})).status()).toBe(403);
-  await page.goto('/tools/transfer-files.html?lang=en');await page.locator('[data-action=createFileLink]').click();await expect(page.locator('#tool-status')).toContainText('Choose a non-empty file');
+  await page.goto('/tools/transfer-files.html?lang=en');await page.locator('#new-item').click();await page.locator('[data-action=createFileLink]').click();await expect(page.locator('#tool-status')).toContainText('Choose a non-empty file');
   await page.locator('[name=files]').setInputFiles({name:'good.pdf',mimeType:'application/pdf',buffer:pdf()});
   await page.route('**/api/file-links?**',route=>route.fulfill({status:404,body:'Not found'}));
   await page.locator('[data-action=createFileLink]').click();await expect(page.locator('#tool-status')).toContainText('upload service is unavailable');await expect(page.locator('[data-action=createFileLink]')).toBeEnabled();

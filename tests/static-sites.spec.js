@@ -4,7 +4,7 @@ const unique = () => 'test-' + require('node:crypto').randomBytes(7).toString('h
 
 test('pasted HTML creates a persistent site with a custom URL, preview and working script', async ({page, request}) => {
   const slug = unique();
-  await page.goto('/tools/host-html.html?lang=en');
+  await page.goto('/tools/host-html.html?lang=en');await page.locator('#new-item').click();
   await page.getByRole('tab', {name:'Paste HTML'}).click();
   await page.locator('[name=html]').fill('<h1>My new website</h1><button onclick="document.querySelector(\'h1\').textContent=\'It works\'">Try it</button><script>try{parent.document.body.dataset.compromised="yes"}catch{}</script>');
   await page.locator('[name=slug]').fill(slug);
@@ -40,7 +40,7 @@ test('ZIP with a wrapper folder keeps relative CSS, JS, images and nested pages 
     'my-site/images/logo.svg':strToU8('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="green"/></svg>'),
     'my-site/pages/about.html':strToU8('<h1>About this site</h1>')
   });
-  await page.goto('/tools/host-html.html?lang=en');
+  await page.goto('/tools/host-html.html?lang=en');await page.locator('#new-item').click();
   await page.locator('[name=file]').setInputFiles({name:'website.zip', mimeType:'application/zip', buffer:Buffer.from(zip)});
   await page.locator('#create-site').click();
   await expect(page.locator('#site-result')).toBeVisible();
@@ -54,7 +54,7 @@ test('ZIP with a wrapper folder keeps relative CSS, JS, images and nested pages 
 });
 
 test('HTML uploads, empty inputs and unavailable backend have clear outcomes', async ({page}) => {
-  await page.goto('/tools/host-html.html?lang=en');
+  await page.goto('/tools/host-html.html?lang=en');await page.locator('#new-item').click();
   await page.locator('#create-site').click();
   await expect(page.locator('#tool-status')).toContainText('Upload a file');
   await page.locator('[name=file]').setInputFiles({name:'hello.html',mimeType:'text/html',buffer:Buffer.from('<h1>Uploaded HTML</h1>')});

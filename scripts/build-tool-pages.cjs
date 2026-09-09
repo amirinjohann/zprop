@@ -28,6 +28,10 @@ for(const tool of [overview, ...catalogue]){
   if(tool.id==='host-html') output=output.replace('../tool-pages.js','../static-site.js').replace('</head>','<link rel="stylesheet" href="../static-site.css"></head>');
   if(tool.id==='short-links') output=output.replace('../tool-pages.js','../short-links-page.js').replace('</head>','<link rel="stylesheet" href="../short-links-page.css"></head>');
   if(tool.id==='bio-pages') output=output.replace('<script src="../tool-pages.js" defer></script>','<script src="../bio-model.js" defer></script><script src="../bio-library.js" defer></script><script src="../bio-drag.js" defer></script><script src="../bio-page.js" defer></script>').replace('</head>','<link rel="stylesheet" href="../bio-page.css"></head>');
+  if(['transfer-files','vcards','host-html'].includes(tool.id)) {
+    const editor=tool.id==='host-html'?'static-site':'tool-pages';
+    output=output.replace('<script src="../'+editor+'.js" defer></script>','<script src="../vcard-model.js" defer></script><script src="../item-library.js" defer></script><script src="../'+editor+'.js" defer></script>').replace('</head>','<link rel="stylesheet" href="../short-links-page.css"><link rel="stylesheet" href="../item-library.css"></head>');
+  }
   // Finish translating and mounting the editor before the incoming page is
   // captured for a transition. Ordinary links and browser history stay native.
   output = output.replace('</head>', '<link rel="stylesheet" href="../action-icons.css"><link rel="stylesheet" href="../premium-ui.css"></head>');

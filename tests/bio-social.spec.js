@@ -7,7 +7,7 @@ test('social setup adds three clickable footer circles that persist in templates
   const slug=await createBio(page);
   await expect(page.locator('#bio-preview .bio-social-circle')).toHaveCount(3);
   await page.locator('[data-tab=appearance]').click();
-  await expect(page.locator('[data-template] .bio-template-social svg')).toHaveCount(18);
+  await expect(page.locator('[data-template] .bio-template-social svg')).toHaveCount(27);
   await page.locator('[data-template=rose]').click();
   await page.locator('#bio-preview [data-setup-social="1"]').click();
   const form=page.locator('#block-details-form');
@@ -43,7 +43,7 @@ test('social setup adds three clickable footer circles that persist in templates
   await page.locator('[data-tab=appearance]').click();await page.locator('[data-template=midnight]').click();
   await expect(page.locator('.bio-page-social a').first()).toHaveCSS('background-color','rgb(191, 202, 255)');
   await expect(page.locator('.bio-page-social a').first()).toHaveAttribute('href',baseURL+'/landing.html?social=1');
-  await page.locator('#publish-bio').click();await expect(page.locator('#tool-status')).toHaveText('Your bio page is published');
+  await page.locator('#publish-bio').click();await expect(page.locator('#bio-result')).toBeVisible();
   const html=await (await request.get('/sites/'+slug+'/')).text();
   expect(html).toContain('aria-label="YouTube"');expect(html).not.toContain('data-setup-social');
   expect(html.indexOf('<nav class="bio-page-social"')).toBeGreaterThan(html.indexOf('My latest work'));
@@ -76,12 +76,12 @@ test('optional social slots are editable from preview, validate on publishing, a
   await social.locator('[data-key=url2]').fill('https://linkedin.com/in/example');
   await page.locator('[data-language=ms]').click();await expect(social.locator('h4')).toContainText('Media sosial');
   await page.locator('[data-language=en]').click();
-  await page.locator('#publish-bio').click();await expect(page.locator('#tool-status')).toHaveText('Your bio page is published');
+  await page.locator('#publish-bio').click();await expect(page.locator('#bio-result')).toBeVisible();
   const html=await (await request.get('/sites/'+slug+'/')).text();
   expect(html.match(/<a class="bio-social-circle"/g)).toHaveLength(2);
   expect(html).not.toContain('<button');
   await social.getByRole('switch').click();await expect(page.locator('.bio-page-social')).toHaveCount(0);
-  await page.locator('#publish-bio').click();await expect(page.locator('#tool-status')).toHaveText('Your bio page is published');
+  await page.locator('#publish-bio').click();await expect(page.locator('#bio-result')).toBeVisible();
   expect(await (await request.get('/sites/'+slug+'/')).text()).not.toContain('<nav class="bio-page-social"');
   await social.getByRole('switch').click();await expect(page.locator('.bio-page-social a')).toHaveCount(2);
   await social.locator('[data-block-action=remove]').click();

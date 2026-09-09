@@ -10,11 +10,11 @@
     preview:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>'
   };
   const selectors = {
-    edit:'[data-page-action="edit"], [data-short-action="edit"], [data-qr-action="edit"], .links-row-actions a:not([target])',
+    edit:'[data-item-action="edit"], [data-page-action="edit"], [data-short-action="edit"], [data-qr-action="edit"], .links-row-actions a:not([target])',
     open:'.bio-page-card .tool-actions a, .short-link-card .tool-actions a, .links-row-actions a[target="_blank"], #open-bio, #open-short-link, #open-file, #open-site',
-    copy:'[data-short-action="copy"], [data-link-action="copy"], #copy-bio, #copy-short-link, #copy-file-link, #copy-site',
-    delete:'[data-page-action="delete"], [data-short-action="delete"], [data-qr-action="delete"], [data-link-action="delete"]',
-    download:'[data-action="downloadHtml"], [data-action="downloadVcard"], #download-file, #download-qr-png, #download-qr-svg, #links-export',
+    copy:'[data-item-action="copy"], [data-short-action="copy"], [data-link-action="copy"], #copy-bio, #copy-short-link, #copy-file-link, #copy-site',
+    delete:'[data-item-action="delete"], [data-page-action="delete"], [data-short-action="delete"], [data-qr-action="delete"], [data-link-action="delete"]',
+    download:'[data-item-action="download"], [data-action="downloadHtml"], [data-action="downloadVcard"], #download-file, #download-qr-png, #download-qr-svg, #links-export',
     preview:'[data-action="generate"]'
   };
   const masks = Object.fromEntries(Object.entries(paths).map(([name,path]) => [name,
