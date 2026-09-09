@@ -5,6 +5,7 @@ test('creates a working short link, copies it and keeps results aligned with the
   const name=slug();
   const destination=baseURL+'/landing.html?from=short-link';
   await page.goto('/tools/short-links.html?lang=en');
+  await page.locator('#new-short-link').click();
   await expect(page.locator('[name=linkDomain]')).toHaveAttribute('readonly','');
   await expect(page.locator('[name=linkDomain]')).toHaveValue('https://zprop.tech');
   await page.locator('[name=url]').fill(destination);
@@ -28,9 +29,9 @@ test('creates a working short link, copies it and keeps results aligned with the
   await page.locator('[name=url]').fill('https://example.com/new');
   await expect(page.locator('#link-result')).toBeHidden();
   await page.locator('[data-action=createLink]').click();
-  await expect(page.locator('#tool-status')).toContainText('sudah digunakan');
-  expect((await request.get(`/s/${name.toUpperCase()}`,{maxRedirects:0})).headers().location).toBe(destination);
-  expect((await request.get(`/${name.toUpperCase()}/`,{maxRedirects:0})).headers().location).toBe(destination);
+  await expect(page.locator('#tool-status')).toHaveText('Perubahan disimpan.');
+  expect((await request.get(`/s/${name.toUpperCase()}`,{maxRedirects:0})).headers().location).toBe('https://example.com/new');
+  expect((await request.get(`/${name.toUpperCase()}/`,{maxRedirects:0})).headers().location).toBe('https://example.com/new');
 });
 
 test('server validates links, handles simultaneous alias claims and saves random aliases',async({request})=>{
@@ -64,12 +65,14 @@ test('a separate browser cannot claim another visitors link name or replace its 
     const name=slug();
     const owner=await first.newPage(),visitor=await second.newPage();
     await owner.goto(baseURL+'/tools/short-links.html?lang=en');
+    await owner.locator('#new-short-link').click();
     await owner.locator('[name=url]').fill('https://example.com/original-owner');
     await owner.locator('[name=slug]').fill(name);
     await owner.locator('[data-action=createLink]').click();
     await expect(owner.locator('#link-result')).toBeVisible();
     await owner.reload();
     await visitor.goto(baseURL+'/tools/short-links.html?lang=en');
+    await visitor.locator('#new-short-link').click();
     await visitor.locator('[name=url]').fill('https://example.com/another-user');
     await visitor.locator('[name=slug]').fill(name.toUpperCase());
     await visitor.locator('[data-action=createLink]').click();
@@ -99,6 +102,7 @@ test('root aliases protect website routes and reject redirects to themselves',as
 
 test('short-link creation reports a missing backend and recovers for retry',async({page})=>{
   await page.goto('/tools/short-links.html?lang=en');
+  await page.locator('#new-short-link').click();
   await page.locator('[name=url]').fill('https://example.com/');
   await page.route('**/api/short-links',route=>route.fulfill({status:404,body:'Not found'}));
   await page.locator('[data-action=createLink]').click();

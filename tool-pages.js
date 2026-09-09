@@ -118,14 +118,25 @@
     if(tool.id==='host-html')$('#html-preview').srcdoc=`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'">`+input('html').value;
   }
   $('#tool-form').addEventListener('input',()=>{status('');if(tool.id==='bio-pages')updatePreview();});
-  $$('#tool-form [data-action]').forEach(button=>button.addEventListener('click',()=>{
+  $$('#tool-form [data-action]').forEach(button=>button.addEventListener('click',async()=>{
     if(['short-links','transfer-files'].includes(tool.id))return;
     const action=button.dataset.action;
     status('');
     if(!valid())return;
     if(['bio-pages','short-links'].includes(tool.id)&&!validUrl(val('url'))){status('invalidUrl');return;}
     updatePreview();
-    if(action==='downloadVcard')download(vcard(),'zprop-contact.vcf','text/vcard;charset=utf-8');
+    if(action==='downloadVcard') {
+      button.disabled=true;
+      try {
+        const content=vcard();
+        const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(content));
+        const id=Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('');
+        const response=await window.ZpropAuth.fetch('/api/vcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id}),signal:AbortSignal.timeout(15000)});
+        if(!response.ok)throw new Error('tracking');
+        download(content,'zprop-contact.vcf','text/vcard;charset=utf-8');
+      } catch { status('storageError'); }
+      finally { button.disabled=false; }
+    }
     if(action==='downloadHtml'){
       const html=tool.id==='host-html'?input('html').value:`<!DOCTYPE html><html lang="${language?'en':'ms'}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(val('name'))}</title><style>body{background:#f8f8f2;color:#183e32;font-family:Georgia,serif;padding:40px 20px}.bio-preview{max-width:400px;margin:auto;background:white;border:1px solid #dce1d7;padding:35px;text-align:center}.bio-avatar{font-size:40px}h3{font-size:30px}p{white-space:pre-wrap;line-height:1.7}a{display:block;background:#183e32;color:white;padding:16px;text-decoration:none}</style></head><body><main class="bio-preview">${bioMarkup()}</main></body></html>`;
       download(html,'zprop-page.html','text/html;charset=utf-8');

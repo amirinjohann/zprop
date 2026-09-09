@@ -1,0 +1,15 @@
+.tool-page :is(button,a).action-icon{display:inline-flex;align-items:center;justify-content:center;flex:0 0 42px;width:42px;min-width:42px;height:42px;min-height:42px;padding:0;gap:0;border:1px solid var(--line);border-radius:8px;background:var(--panel,#fff);color:var(--ink);font-size:0!important;line-height:0;vertical-align:middle;text-decoration:none;cursor:pointer;transition:background-color .15s,border-color .15s,color .15s}
+.tool-page .action-icon>span{display:none}
+.tool-page .action-icon::before{content:"";display:block;flex:0 0 19px;width:19px;height:19px;background:currentColor;-webkit-mask:var(--action-icon-mask) center/contain no-repeat;mask:var(--action-icon-mask) center/contain no-repeat}
+.tool-page .action-icon:hover{background:#edf2e9;border-color:#8a9d80;filter:none}
+.tool-page .action-icon:focus-visible{outline:3px solid var(--theme-accent,#71855c);outline-offset:3px}
+.tool-page .action-icon[data-action-icon=delete]{color:#b12c36}
+.tool-page .action-icon[data-action-icon=delete]:hover{background:#fff0f1;border-color:#d78b94}
+.tool-page .action-icon:disabled{opacity:.45;cursor:not-allowed}
+.tool-page .action-icon[hidden]{display:none}
+html[data-theme=dark] .tool-page .action-icon:hover{background:#26392b;border-color:#64795f}
+html[data-theme=dark] .tool-page .action-icon[data-action-icon=delete]{color:#ffadb4}
+html[data-theme=dark] .tool-page .action-icon[data-action-icon=delete]:hover{background:#40282c;border-color:#885961}
+.short-link-card .tool-actions,.bio-page-card .tool-actions,.qr-code-card .tool-actions,.links-row-actions{align-items:center}
+@media(pointer:coarse){.tool-page :is(button,a).action-icon{width:44px;min-width:44px;height:44px;min-height:44px;flex-basis:44px}}
+@media(prefers-reduced-motion:reduce){.tool-page :is(button,a).action-icon{transition:none}}

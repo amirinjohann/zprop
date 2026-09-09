@@ -47,7 +47,7 @@ if (!isMainThread) {
   try { parentPort.postMessage({ files: extract(new Uint8Array(workerData.data), workerData.type) }); }
   catch (error) { parentPort.postMessage({ error: error.status ? error.message : 'invalidZip', status: error.status || 400 }); }
 } else {
-  async function create(req, url) {
+  async function create(req, url, ownerId) {
     const type = url.searchParams.get('type');
     if (!['html', 'zip'].includes(type)) throw fail('fileType');
     const requested = url.searchParams.get('slug') || '';
@@ -77,6 +77,7 @@ if (!isMainThread) {
         await fs.mkdir(path.dirname(target), { recursive: true });
         await fs.writeFile(target, bytes, { flag: 'wx' });
       }
+      await fs.writeFile(path.join(directory, '.site.json'), JSON.stringify({ ownerId }), { flag:'wx' });
       await fs.writeFile(path.join(directory, '.ready'), 'ready');
     } catch (error) {
       // Only this request's newly reserved directory can be removed.

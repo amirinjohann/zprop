@@ -6,7 +6,7 @@
   all('[data-placeholder-copy]').forEach(el => { ms[el.dataset.placeholderCopy] = el.placeholder; });
   all('[data-alt-copy]').forEach(el => { ms[el.dataset.altCopy] = el.alt; });
   const en = {
-    skip:'Skip to content', brandLine:'A new space. A new story.', tutorial:'Guide & FAQ', signIn:'Sign in', getInTouch:'Contact ZPROP',
+    skip:'Skip to content', brandLine:'A new space. A new story.', tutorial:'Guide & FAQ', dashboard:'Dashboard', signIn:'Sign in', getInTouch:'Contact ZPROP',
     badge:'Your property world, connected by ZPROP', heroTitle:'One place.<br>More possibilities.<br><span>Your ZPROP.</span>', heroIntro:'Discover properties, meet our team and start your next chapter. All with a digital identity that’s distinctly ZPROP.',
     feature1:'Bio pages', feature2:'Short links', feature3:'File link', feature4:'Share vcards', feature5:'Static site', feature6:'QR Codes', portalSignIn:'Sign in to your portal', browse:'Explore ZPROP tools', previewNote:'Admin & agent portal preview · Sign-in is not yet enabled.',
     phoneBackLabel:'A SPACE FOR YOU', phoneBackTitle:'A new home.<br>A new story.', phoneSearch:'Find your home', phoneTitle:'Your property<br>partner.', phoneSubtitle:'Melaka & beyond', phoneProperties:'Explore properties', phoneContact:'Talk to our team', phoneSaved:'Places you love', phoneFooter:'Your next chapter starts here.', sceneCaption:'Your own identity. Closer connections.',

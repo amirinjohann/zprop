@@ -1,5 +1,5 @@
 const {test,expect}=require('./auth-fixture');
-const tools=['bio-pages','short-links','transfer-files','vcards','host-html','qr-codes'];
+const tools=['dashboard','bio-pages','short-links','transfer-files','vcards','host-html','qr-codes'];
 
 test('theme persists across every page and has bilingual keyboard controls',async({page},info)=>{
   await page.goto('/?lang=en');
@@ -11,7 +11,7 @@ test('theme persists across every page and has bilingual keyboard controls',asyn
     await page.goto('/'+route+'?lang=en');
     await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
     await expect(page.locator('.theme-toggle')).toHaveAttribute('aria-pressed','true');
-    expect(await page.evaluate(()=>getComputedStyle(document.body).backgroundColor)).toBe('rgb(16, 26, 21)');
+    expect(await page.evaluate(()=>getComputedStyle(document.body).backgroundColor)).toBe('rgb(16, 17, 20)');
     if(info.project.name==='mobile')await page.setViewportSize({width:320,height:740});
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   }

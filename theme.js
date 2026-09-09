@@ -15,6 +15,12 @@
   window.ZpropNavigation = {
     ready() {
       root.dataset.toolReady = '';
+      const nav = document.querySelector('.tools-sidebar nav');
+      const active = nav?.querySelector('[aria-current=page]');
+      if (active && matchMedia('(max-width:760px)').matches) {
+        // Move only the horizontal navigation, keeping the page's scroll intact.
+        nav.scrollLeft = active.offsetLeft - nav.offsetLeft - (nav.clientWidth - active.offsetWidth) / 2;
+      }
       if (location.protocol === 'file:' || document.querySelector('#tool-transition-opt-in')) return;
       const style = document.createElement('style');
       style.id = 'tool-transition-opt-in';
@@ -39,7 +45,7 @@
     const dark = theme === 'dark';
     const english = root.lang === 'en';
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = dark ? '#101a15' : '#183e32';
+    if (meta) meta.content = document.body?.matches('.tool-page, .dashboard-page, .sign-in-page') ? (dark ? '#101114' : '#f5f3ee') : (dark ? '#101a15' : '#183e32');
     if (!button) return;
     button.setAttribute('aria-label', english ? 'Dark mode' : 'Mod gelap');
     button.setAttribute('aria-pressed', String(dark));

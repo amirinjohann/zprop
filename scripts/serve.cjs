@@ -8,6 +8,8 @@ const fileLinks = require('./file-links.cjs');
 const auth = require('./auth.cjs');
 const bioPages = require('./bio-pages.cjs');
 const qrCodes = require('./qr-codes.cjs');
+const dashboardStats = require('./dashboard-stats.cjs');
+const dashboardEvents = require('./dashboard-events.cjs');
 const { publicOrigin } = require('../public-origin.js');
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || '127.0.0.1';
@@ -20,7 +22,7 @@ http.createServer(async (req, res) => {
   // Reject ambiguous Windows paths before routing or resolving a file.
   if (pathname.includes('\\') || pathname.includes('\0') || pathname.split('/').some(part => part === '..' || /[. ]$/.test(part))) { res.writeHead(400).end(); return; }
   if (await auth.handle(req, res, pathname)) return;
-  const protectedPage = /^\/tools(?:\/|$)/i.test(pathname) || /^\/(tool-pages|static-site|bio-page|bio-library|qr-page)\.js$/i.test(pathname);
+  const protectedPage = /^\/tools(?:\/|$)/i.test(pathname) || /^\/(tool-pages|static-site|bio-page|bio-library|qr-page|short-links-page)\.js$/i.test(pathname);
   if (protectedPage || pathname.startsWith('/api/')) {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Vary', 'Cookie');
@@ -32,6 +34,46 @@ http.createServer(async (req, res) => {
       }
       return;
     }
+  }
+  const actingOwner = auth.session(req)?.user.id;
+  if (actingOwner && ['POST','PUT','DELETE'].includes(req.method) && /^\/api\/(bio-pages|qr-codes|short-links|file-links|static-sites|vcards|dashboard-links)(\/|$)/.test(pathname)) {
+    res.once('finish', () => { if(res.statusCode>=200 && res.statusCode<300) dashboardEvents.changed(actingOwner); });
+  }
+  if (pathname === '/api/dashboard-events') {
+    if(req.method!=='GET') {res.writeHead(405).end();return;}
+    dashboardEvents.subscribe(req,res,actingOwner,()=>auth.session(req)?.user.id===actingOwner);
+    return;
+  }
+  const dashboardDelete = pathname.match(/^\/api\/dashboard-links\/([a-z-]+)\/([a-zA-Z0-9_-]+)$/);
+  if (dashboardDelete) {
+    const json = (status,data)=>res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'}).end(JSON.stringify(data));
+    if(req.method!=='DELETE') {json(405,{error:'method'});return;}
+    if(!auth.sameOrigin(req)) {json(403,{error:'origin'});return;}
+    if(pendingCreates>=8) {json(429,{error:'busy'});return;}
+    const previous=creationQueue;let release;
+    creationQueue=new Promise(resolve=>{release=resolve;});pendingCreates++;
+    await previous;
+    try {json(200,await dashboardStats.remove(req,dashboardDelete[1],dashboardDelete[2],actingOwner));}
+    catch(error) {json(error.status||500,{error:error.status?error.message:'server'});}
+    finally {pendingCreates--;release();}
+    return;
+  }
+  if (['/api/dashboard-stats','/api/dashboard-links','/api/vcards'].includes(pathname)) {
+    const json = (status, data) => res.writeHead(status, { 'Content-Type':'application/json', 'Cache-Control':'no-store' }).end(JSON.stringify(data));
+    const tracking = pathname === '/api/vcards';
+    if (req.method !== (tracking ? 'POST' : 'GET')) { json(405, { error:'method' }); return; }
+    if (tracking && !auth.sameOrigin(req)) { json(403, { error:'origin' }); return; }
+    // Read a committed snapshot, without racing file replacement on Windows.
+    if(pendingCreates>=8) {json(429,{error:'busy'});return;}
+    const previous=creationQueue;let release;
+    creationQueue=new Promise(resolve=>{release=resolve;});pendingCreates++;
+    await previous;
+    try {
+      const ownerId = auth.session(req).user.id;
+      json(200, await (tracking ? dashboardStats.trackVcard(req, ownerId) : dashboardStats.summary(ownerId, pathname==='/api/dashboard-links')));
+    } catch (error) { json(error.status || 500, { error:error.status ? error.message : 'server' }); }
+    finally {pendingCreates--;release();}
+    return;
   }
   const bioRoute = pathname.match(/^\/api\/bio-pages(?:\/([a-z0-9-]+))?$/);
   const qrRoute = pathname.match(/^\/api\/qr-codes(?:\/([^/]+))?$/);
@@ -47,11 +89,17 @@ http.createServer(async (req, res) => {
     finally{pendingCreates--;release();}
     return;
   }
-  if (pathname === '/api/short-links' && req.method === 'POST') {
+  const shortRoute = pathname.match(/^\/api\/short-links(?:\/([a-zA-Z0-9_-]+))?$/);
+  if (shortRoute) {
     const json = (status, data) => res.writeHead(status, { 'Content-Type':'application/json', 'Cache-Control':'no-store' }).end(JSON.stringify(data));
-    if (!auth.sameOrigin(req)) { json(403, { error:'linkOrigin' }); return; }
-    try { json(201, await links.create(req)); }
+    if (req.method!=='GET' && !auth.sameOrigin(req)) { json(403, { error:'linkOrigin' }); return; }
+    if(pendingCreates>=8) {json(429,{error:'busy'});return;}
+    const previous=creationQueue;let release;
+    creationQueue=new Promise(resolve=>{release=resolve;});pendingCreates++;
+    await previous;
+    try { json(req.method==='POST'?201:200, await links.handle(req,shortRoute[1],actingOwner)); }
     catch (error) { json(error.status || 500, { error:error.status ? error.message : 'linkServer' }); }
+    finally {pendingCreates--;release();}
     return;
   }
   if (['/api/static-sites','/api/file-links'].includes(pathname) && req.method === 'POST') {
@@ -64,7 +112,7 @@ http.createServer(async (req, res) => {
     creationQueue = new Promise(resolve => { release = resolve; });
     pendingCreates++;
     await previous;
-    try { json(201, await (pathname === '/api/file-links' ? fileLinks : sites).create(req, new URL(req.url, 'http://localhost'))); }
+    try { json(201, await (pathname === '/api/file-links' ? fileLinks : sites).create(req, new URL(req.url, 'http://localhost'), auth.session(req).user.id)); }
     catch (error) { json(error.status || 500, { error:error.status ? error.message : 'server' }); }
     finally { pendingCreates--; release(); }
     return;

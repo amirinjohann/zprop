@@ -32,7 +32,7 @@ test('English tool navigation paints a complete editor without BM or an extra se
     await expect(page).toHaveURL(new RegExp(`/tools/${id}.html\\?lang=en`));
     await expect(page.locator('#tool-title')).toBeVisible();
     await expect.poll(() => page.evaluate(() => window.languageFrames.visible)).toBeGreaterThan(0);
-    await expect(page.locator('#tool-form:visible, #bio-library:visible, #qr-library:visible')).toBeVisible();
+    await expect(page.locator('#tool-form:visible, #bio-library:visible, #qr-library:visible, #short-library:visible')).toBeVisible();
     expect(await page.evaluate(() => window.languageFrames.wrong)).toEqual([]);
   }
   expect(sessionRequests).toBe(0);

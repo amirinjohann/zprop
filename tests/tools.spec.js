@@ -1,6 +1,6 @@
 const {test,expect}=require('./auth-fixture');
 const fs=require('node:fs/promises');
-const {createBio}=require('./bio-helper');
+const {createBio,expandBlocks}=require('./bio-helper');
 const ids=['bio-pages','short-links','transfer-files','vcards','host-html','qr-codes'];
 async function downloaded(page,button){const promise=page.waitForEvent('download');await button.click();const d=await promise;return {name:d.suggestedFilename(),text:await fs.readFile(await d.path(),'utf8')};}
 
@@ -34,6 +34,7 @@ test('all six tools navigate to dedicated local bilingual pages',async({page,req
 
 test('bio HTML escapes user supplied text',async({page})=>{
   await createBio(page);
+  await expandBlocks(page);
   await page.locator('[name=name]').fill('<img src=x onerror=alert(1)>');
   await expect(page.locator('#bio-preview h3')).toHaveText('<img src=x onerror=alert(1)>');
   await expect(page.locator('#bio-preview img')).toHaveCount(0);

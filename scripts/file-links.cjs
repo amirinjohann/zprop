@@ -27,7 +27,7 @@ async function validate(file, extension) {
   throw fail('fileInvalid');
 }
 
-async function create(req, url) {
+async function create(req, url, ownerId) {
   const filename = url.searchParams.get('name') || '';
   const extension = path.extname(filename).toLowerCase();
   if (!types[extension]) throw fail('fileType');
@@ -49,7 +49,7 @@ async function create(req, url) {
     await validate(file, extension);
     const record = { kind:'file', slug:claim.slug, filename, mime:types[extension], size };
     // Publish only after the complete upload has been checked.
-    await fs.writeFile(path.join(claim.target, 'link.json'), JSON.stringify(record), { flag:'wx' });
+    await fs.writeFile(path.join(claim.target, 'link.json'), JSON.stringify({ ...record, ownerId }), { flag:'wx' });
     return { ...record, url:`/${claim.slug}` };
   } catch (error) { await links.release(claim.target); throw error; }
 }
