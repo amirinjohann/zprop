@@ -13,8 +13,7 @@
   const pageSize = 20;
   function publicUrl(item) {
     if (!item.url) return null;
-    const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
-    try { const url = new URL(item.url, local ? location.origin : window.ZPROP_PUBLIC_ORIGIN); return ['http:','https:'].includes(url.protocol) ? url.href : null; } catch { return null; }
+    try { const url = new URL(item.url, window.ZPROP_PUBLIC_ORIGIN); return ['http:','https:'].includes(url.protocol) ? url.href : null; } catch { return null; }
   }
   function matches() {
     const query = $('#links-search').value.trim().toLocaleLowerCase();

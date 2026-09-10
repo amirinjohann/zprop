@@ -26,7 +26,7 @@ test('PDF upload creates a named link with exact bytes, inline viewing and downl
   await page.locator('[name=slug]').fill(slug);
   await page.getByRole('button',{name:'Create file link',exact:true}).click();
   await expect(page.locator('#file-result')).toBeVisible();
-  await expect(page.locator('#file-address')).toHaveText(`https://zprop.tech/${slug}`);
+  await expect(page.locator('#file-address')).toHaveText(`${new URL(page.url()).origin}/${slug}`);
   const result=await request.get('/'+slug);expect(result.status()).toBe(200);expect(await result.body()).toEqual(bytes);
   expect(result.headers()['content-type']).toBe('application/pdf');expect(result.headers()['content-disposition']).toContain('inline;');
   const range=await request.get('/'+slug,{headers:{Range:'bytes=0-4'}});expect(range.status()).toBe(206);expect(await range.text()).toBe('%PDF-');

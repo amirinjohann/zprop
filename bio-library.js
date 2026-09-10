@@ -13,9 +13,11 @@ window.ZpropBioLibrary = {
       let data;try{data=await response.json();}catch{throw new Error('server');}
       if(!response.ok)throw new Error(data.error||'server');return data;
     }
-    const errorText=error=>t(['taken','slugError','notFound','conflict','invalidUrl','imageError','imageTotal','busy'].includes(error.message)?error.message:'server');
+    const errorText=error=>t(['taken','slugError','notFound','conflict','invalidUrl','imageError','imageTotal','busy','itemLimit'].includes(error.message)?error.message:'server');
+    const atLimit=()=>loaded&&!listError&&pages.length>=5;
     function renderList() {
-      $('#bio-library-status').textContent=listError?t(listError):loaded?'':t('loadingPages');
+      $('#bio-library-status').textContent=listError?t(listError):!loaded?t('loadingPages'):atLimit()?t('itemLimit'):'';
+      $('#new-bio').disabled=busy||atLimit();
       $('#bio-page-list').innerHTML=pages.length?pages.map(page=>`<article class="bio-page-card" data-page-slug="${esc(page.slug)}"><div><span class="bio-page-badge">${t(page.published?'published':'draft')}</span><h3>${esc(page.name || page.slug)}</h3><p>${esc(urlFor(page.slug))}</p></div><div class="tool-actions"><button type="button" data-page-action="edit">${t('editPage')}</button>${page.published?`<a href="${esc(urlFor(page.slug))}" target="_blank" rel="noopener noreferrer">${t('open')} ↗</a>`:''}<button type="button" data-page-action="delete" class="bio-danger">${t('deletePage')}</button></div></article>`).join(''):loaded&&!listError?`<div class="bio-library-empty"><span aria-hidden="true">▣</span><h3>${t('noPages')}</h3><p class="bio-hint">${t('createHelp')}</p></div>`:'';
       if(listError)$('#bio-page-list').innerHTML=`<button type="button" id="retry-bio-list" class="bio-add">${t('retry')}</button>`;
     }
@@ -32,7 +34,7 @@ window.ZpropBioLibrary = {
       try{select(await api(slug));}catch(error){$('#bio-library-status').textContent=errorText(error);}
       finally{busy=false;}
     }
-    $('#new-bio').addEventListener('click',()=>{if(busy)return;$('#create-bio-form').reset();$('#create-bio-status').textContent='';$('#create-bio-dialog').showModal();$('#create-bio-form [name=newSlug]').focus();});
+    $('#new-bio').addEventListener('click',()=>{if(busy||atLimit())return;$('#create-bio-form').reset();$('#create-bio-status').textContent='';$('#create-bio-dialog').showModal();$('#create-bio-form [name=newSlug]').focus();});
     $('#cancel-create-bio').addEventListener('click',()=>{if(!busy)$('#create-bio-dialog').close();});
     $('#create-bio-dialog').addEventListener('cancel',event=>{if(busy)event.preventDefault();});
     $('#create-bio-form').addEventListener('submit',async event=>{
@@ -61,7 +63,7 @@ window.ZpropBioLibrary = {
       if(busy)return;busy=true;$('#confirm-delete-bio').disabled=true;
       try{await api(deleteSlug,{method:'DELETE'});$('#delete-bio-dialog').close();await refresh();}
       catch(error){$('#delete-bio-status').textContent=errorText(error);}
-      finally{busy=false;$('#confirm-delete-bio').disabled=false;}
+      finally{busy=false;$('#confirm-delete-bio').disabled=false;renderList();}
     });
     window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});
     function localize(){renderList();$('#cancel-create-bio').setAttribute('aria-label',t('close'));}

@@ -2,19 +2,20 @@ const { test, expect } = require('./auth-fixture');
 const { zipSync, strToU8 } = require('fflate');
 const unique = () => 'test-' + require('node:crypto').randomBytes(7).toString('hex');
 
-test('pasted HTML creates a persistent site with a custom URL, preview and working script', async ({page, request}) => {
+test('pasted HTML creates a persistent site with a custom URL, preview and working script', async ({page, request, baseURL}) => {
   const slug = unique();
+  const origin = new URL(baseURL).origin;
   await page.goto('/tools/host-html.html?lang=en');await page.locator('#new-item').click();
   await page.getByRole('tab', {name:'Paste HTML'}).click();
   await page.locator('[name=html]').fill('<h1>My new website</h1><button onclick="document.querySelector(\'h1\').textContent=\'It works\'">Try it</button><script>try{parent.document.body.dataset.compromised="yes"}catch{}</script>');
   await page.locator('[name=slug]').fill(slug);
   await page.locator('#create-site').click();
   await expect(page.locator('#site-result')).toBeVisible();
-  await expect(page.locator('#site-url')).toHaveText(`https://zprop.tech/sites/${slug}/`);
-  await expect(page.locator('#open-site')).toHaveAttribute('href', `https://zprop.tech/sites/${slug}/`);
+  await expect(page.locator('#site-url')).toHaveText(`${origin}/sites/${slug}/`);
+  await expect(page.locator('#open-site')).toHaveAttribute('href', `${origin}/sites/${slug}/`);
   await page.evaluate(() => { navigator.clipboard.writeText = async text => { window.copiedSite = text; }; });
   await page.locator('#copy-site').click();
-  expect(await page.evaluate(() => window.copiedSite)).toBe(`https://zprop.tech/sites/${slug}/`);
+  expect(await page.evaluate(() => window.copiedSite)).toBe(`${origin}/sites/${slug}/`);
   const frame = page.frameLocator('#html-preview');
   await expect(frame.locator('h1')).toHaveText('My new website');
   await frame.getByRole('button', {name:'Try it'}).click();
@@ -27,7 +28,7 @@ test('pasted HTML creates a persistent site with a custom URL, preview and worki
   await expect(page.locator('#tool-status')).toContainText('already taken');
   await page.context().clearCookies();
   const site = await page.context().newPage();
-  await site.goto(`https://zprop.tech/sites/${slug}/`);
+  await site.goto(`${origin}/sites/${slug}/`);
   await expect(site.locator('h1')).toHaveText('My new website');
   await site.reload(); await expect(site.locator('h1')).toHaveText('My new website');
 });
@@ -63,7 +64,7 @@ test('HTML uploads, empty inputs and unavailable backend have clear outcomes', a
   await page.route('**/api/static-sites?**', route => route.fulfill({status:404,contentType:'text/html',body:'Not found'}));
   await page.locator('#create-site').click();
   await expect(page.locator('#tool-status')).toContainText('This address does not provide the upload service');
-  await expect(page.locator('#upload-service-link')).toHaveAttribute('href','https://zprop.tech/tools/host-html.html?lang=en');
+  await expect(page.locator('#upload-service-link')).toHaveAttribute('href', new URL(page.url()).origin + '/tools/host-html.html?lang=en');
   await expect(page.locator('#upload-service-link')).toBeVisible();
   await page.route('**/api/static-sites?**', route => route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({error:'server'})}));
   await page.locator('#create-site').click();

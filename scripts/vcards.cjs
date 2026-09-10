@@ -2,7 +2,8 @@
 const path=require('node:path');
 const crypto=require('node:crypto');
 const model=require('../vcard-model.js');
-const root=path.resolve(__dirname,'../.created-vcards');
+const { assertRoom, created, removed } = require('./item-limit.cjs');
+const root=path.join(require('./data-root.cjs')(),'.created-vcards');
 const fail=(key,status=400)=>Object.assign(new Error(key),{status});
 function filename(owner,id){if(!/^[a-f0-9]{64}$/.test(id||''))throw fail('notFound',404);return path.join(root,owner,id+'.json');}
 async function read(owner,id){try{return JSON.parse(await fs.readFile(filename(owner,id),'utf8'));}catch(error){if(error.code==='ENOENT')throw fail('notFound',404);throw error;}}
@@ -10,14 +11,18 @@ async function body(req){const chunks=[];let size=0;for await(const chunk of req
 async function write(owner,id,data){const file=filename(owner,id),temp=file+'.'+crypto.randomUUID()+'.tmp';await fs.mkdir(path.dirname(file),{recursive:true});try{await fs.writeFile(temp,JSON.stringify(data),{flag:'wx',mode:0o600});await fs.rename(temp,file);}finally{await fs.rm(temp,{force:true});}}
 async function handle(req,id,owner){
   if(req.method==='GET'&&id){const saved=await read(owner,id);if(!saved.state)throw fail('legacy',409);return {id,...saved};}
-  if(req.method==='DELETE'&&id){const saved=await read(owner,id);if(saved.state){const input=await body(req);if(input.revision!==saved.revision)throw fail('conflict',409);}await fs.unlink(filename(owner,id));return {ok:true};}
+  if(req.method==='DELETE'&&id){const saved=await read(owner,id);if(saved.state){const input=await body(req);if(input.revision!==saved.revision)throw fail('conflict',409);}await fs.unlink(filename(owner,id));removed(owner,'vcards');return {ok:true};}
   if(!['POST','PUT'].includes(req.method)||req.method==='PUT'&&!id||req.method==='POST'&&id)throw fail('method',405);
   const input=await body(req);
   // Keep existing fingerprint-only tracking requests compatible.
   if(req.method==='POST'&&input.state===undefined){
     if(typeof input.id!=='string'||!/^[a-f0-9]{64}$/.test(input.id))throw fail('request');
     const file=filename(owner,input.id);await fs.mkdir(path.dirname(file),{recursive:true});
-    try{await fs.writeFile(file,'{}',{flag:'wx',mode:0o600});}catch(error){if(error.code!=='EEXIST')throw error;}
+    try{await fs.access(file);}catch(error){
+      if(error.code!=='ENOENT')throw error;
+      await assertRoom(owner,'vcards');
+    }
+    try{await fs.writeFile(file,'{}',{flag:'wx',mode:0o600});created(owner,'vcards');}catch(error){if(error.code!=='EEXIST')throw error;}
     return {ok:true};
   }
   let state;try{state=model.validate(input.state);}catch{throw fail('request');}
@@ -39,7 +44,10 @@ async function handle(req,id,owner){
       }
     }
   }
+  if(!previous)await assertRoom(owner,'vcards');
   const saved={state,revision:(previous?.revision||0)+1,updatedAt:new Date().toISOString()};
-  await write(owner,id,saved);return {id,...saved};
+  await write(owner,id,saved);
+  if(!previous)created(owner,'vcards');
+  return {id,...saved};
 }
 module.exports={handle};

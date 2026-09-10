@@ -45,7 +45,7 @@ test('profiles can be moved, added, duplicated and removed independently, then p
 test('legacy saved profiles become editable blocks without losing a full page or changing its published HTML',async({page,request})=>{
   const slug=await createBio(page);
   await expandBlocks(page);
-  const target=path.resolve('.generated-sites',slug,'.bio.json');
+  const target=path.join(process.env.ZPROP_DATA_DIR||'.','.generated-sites',slug,'.bio.json');
   const record=JSON.parse(await fs.readFile(target,'utf8'));
   const {schemaVersion,blocks,...style}=record.state;
   const photo='data:image/png;base64,'+(await fs.readFile('assets/zprop-tech-logo.png')).toString('base64');

@@ -2,8 +2,9 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const model = require('../qr-model.js');
+const { assertRoom, created, removed } = require('./item-limit.cjs');
 const qrcode = require('qrcode-generator');
-const storage = path.resolve(__dirname, '../.qr-codes');
+const storage = path.join(require('./data-root.cjs')(), '.qr-codes');
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const fail = (code, status = 400) => Object.assign(new Error(code), {status});
 const fields = {
@@ -62,7 +63,7 @@ async function handle(req,id,owner) {
   const previous=id?await read(owner,id):null;
   const input=await body(req);
   if (previous && input.revision!==previous.revision) throw fail('conflict',409);
-  if (req.method==='DELETE') {await fs.unlink(filename(owner,id));return {ok:true};}
+  if (req.method==='DELETE') {await fs.unlink(filename(owner,id));removed(owner,'qr-codes');return {ok:true};}
   const nextState=state(input.type,input.state), now=new Date().toISOString();
   const recordId=id || crypto.randomUUID();
   const event=previous?.event || {uid:recordId+'@zprop.tech',created:now,timeZone:input.timeZone};
@@ -70,7 +71,10 @@ async function handle(req,id,owner) {
   try {new Intl.DateTimeFormat('en',{timeZone:event.timeZone}).format();} catch {throw fail('request');}
   const payload=model.payload(input.type,nextState,{...event,created:new Date(event.created)});
   try {qrcode.stringToBytes=text=>Array.from(Buffer.from(text,'utf8'));const qr=qrcode(0,'M');qr.addData(payload,'Byte');qr.make();} catch {throw fail('tooLong');}
+  if (!previous) await assertRoom(owner,'qr-codes');
   const record={id:recordId,type:input.type,state:nextState,event,payload,revision:(previous?.revision || 0)+1,createdAt:previous?.createdAt || now,updatedAt:now};
-  await write(owner,record); return record;
+  await write(owner,record);
+  if (!previous) created(owner,'qr-codes');
+  return record;
 }
 module.exports={handle};

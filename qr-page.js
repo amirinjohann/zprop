@@ -5,7 +5,7 @@
   const $$ = selector => [...document.querySelectorAll(selector)];
   const tool = window.ZPROP_TOOLS.find(item => item.id === 'qr-codes');
   const copy = {
-    myCodes:['Kod QR anda','Your QR codes'], manageHelp:['Cipta, edit dan urus semua kod QR anda.','Create, edit and manage all your QR codes.'], createNew:['Cipta kod QR','Create QR code'], edit:['Edit','Edit'], remove:['Padam kod QR','Delete QR code'], saved:['Disimpan','Saved'], noCodes:['Belum ada kod QR.','No QR codes yet.'], noCodesHelp:['Cipta kod QR pertama anda untuk bermula.','Create your first QR code to get started.'], loading:['Memuatkan kod QR…','Loading QR codes…'], retry:['Cuba semula','Try again'], loadError:['Kod QR tidak dapat dimuatkan. Cuba semula.','Could not load your QR codes. Try again.'], server:['Kod QR tidak dapat disimpan. Semak sambungan dan cuba semula.','Could not save your QR code. Check your connection and try again.'], saving:['Menyimpan kod QR…','Saving QR code…'], update:['Kemas kini kod QR','Update QR code'], updated:['Kod QR dikemas kini. Muat turun semula untuk menggunakan versi baharu.','QR code updated. Download it again to use the new version.'], cancel:['Batal','Cancel'], cancelEdit:['Batal edit','Cancel editing'], unsaved:['Perubahan belum disimpan','Unsaved changes'], discard:['Buang perubahan yang belum disimpan?','Discard unsaved changes?'], deleteHelp:['Padam kod QR ini daripada akaun anda? Fail QR yang telah dimuat turun masih boleh diimbas.','Delete this QR code from your account? Previously downloaded QR files can still be scanned.'], deleteError:['Kod QR tidak dapat dipadam. Cuba semula.','Could not delete your QR code. Try again.'], conflict:['Kod QR telah diubah di tempat lain. Kembali ke senarai dan buka semula sebelum mengedit.','This QR code was changed elsewhere. Return to the list and reopen it before editing.'], notFound:['Kod QR ini tidak lagi tersedia. Kembali ke senarai kod QR anda.','This QR code is no longer available. Return to your QR code list.'], origin:['Buka alatan pada pelayan ZPROP dan cuba semula.','Open the tool on the ZPROP server and try again.'], busy:['Pelayan sedang sibuk. Cuba lagi sebentar.','The server is busy. Try again shortly.'], editingHint:['Ubah maklumat dan tekan Kemas kini kod QR untuk menyimpan dan melihat pratonton.','Edit your details and press Update QR code to save and preview.'],
+    myCodes:['Kod QR anda','Your QR codes'], manageHelp:['Cipta, edit dan urus semua kod QR anda.','Create, edit and manage all your QR codes.'], createNew:['Cipta kod QR','Create QR code'], edit:['Edit','Edit'], remove:['Padam kod QR','Delete QR code'], saved:['Disimpan','Saved'], noCodes:['Belum ada kod QR.','No QR codes yet.'], noCodesHelp:['Cipta kod QR pertama anda untuk bermula.','Create your first QR code to get started.'], loading:['Memuatkan kod QR…','Loading QR codes…'], retry:['Cuba semula','Try again'], loadError:['Kod QR tidak dapat dimuatkan. Cuba semula.','Could not load your QR codes. Try again.'], server:['Kod QR tidak dapat disimpan. Semak sambungan dan cuba semula.','Could not save your QR code. Check your connection and try again.'], saving:['Menyimpan kod QR…','Saving QR code…'], update:['Kemas kini kod QR','Update QR code'], updated:['Kod QR dikemas kini. Muat turun semula untuk menggunakan versi baharu.','QR code updated. Download it again to use the new version.'], cancel:['Batal','Cancel'], cancelEdit:['Batal edit','Cancel editing'], unsaved:['Perubahan belum disimpan','Unsaved changes'], discard:['Buang perubahan yang belum disimpan?','Discard unsaved changes?'], deleteHelp:['Padam kod QR ini daripada akaun anda? Fail QR yang telah dimuat turun masih boleh diimbas.','Delete this QR code from your account? Previously downloaded QR files can still be scanned.'], deleteError:['Kod QR tidak dapat dipadam. Cuba semula.','Could not delete your QR code. Try again.'], conflict:['Kod QR telah diubah di tempat lain. Kembali ke senarai dan buka semula sebelum mengedit.','This QR code was changed elsewhere. Return to the list and reopen it before editing.'], notFound:['Kod QR ini tidak lagi tersedia. Kembali ke senarai kod QR anda.','This QR code is no longer available. Return to your QR code list.'], origin:['Buka alatan pada pelayan ZPROP dan cuba semula.','Open the tool on the ZPROP server and try again.'], busy:['Pelayan sedang sibuk. Cuba lagi sebentar.','The server is busy. Try again shortly.'], itemLimit:['Anda boleh menyimpan sehingga 5 item untuk alatan ini. Padam satu untuk menambah yang baharu.','You can save up to 5 items in this tool. Delete one to add another.'], editingHint:['Ubah maklumat dan tekan Kemas kini kod QR untuk menyimpan dan melihat pratonton.','Edit your details and press Update QR code to save and preview.'],
     suite:['ALATAN ZPROP','ZPROP TOOLS'], sidebarNote:['Identiti sendiri.<br>Ruang milik anda.','Your own identity.<br>Your own space.'], allTools:['Semua alatan','All tools'], help:['Perlukan bantuan?','Need help?'],
     editor:['Cipta kod QR','Create QR code'], types:['Jenis kod QR','QR code type'], url:['URL','URL'], whatsapp:['WhatsApp','WhatsApp'], location:['Location','Location'], event:['Event','Event'], vcard:['Vcard','Vcard'],
     name:['Nama kod QR','QR code name'], nameHint:['Pilihan. Digunakan sebagai nama fail muat turun.','Optional. Used as the download filename.'], destination:['URL destinasi','Destination URL'], urlHint:['Masukkan pautan lengkap bermula dengan https:// atau http://.','Enter a full link starting with https:// or http://.'],
@@ -102,6 +102,7 @@
   function setBusy(value) {
     busy = value; editor.inert = value; $('#qr-library').inert = value;
     $('#confirm-delete-qr').disabled = value; $('#cancel-delete-qr').disabled = value;
+    $('#new-qr').disabled = value || atLimit();
   }
   async function api(id = '', options = {}) {
     const response = await window.ZpropAuth.fetch(new URL('api/qr-codes' + (id ? '/' + encodeURIComponent(id) : ''), base), options);
@@ -172,8 +173,10 @@
     $('#qr-library').hidden=true; editor.hidden=false; setQuery(record.id);
   }
   let codes=[], loaded=false, listStatus='loading', pendingDelete=null;
+  const atLimit=()=>loaded&&!listStatus&&codes.length>=5;
   function renderList() {
-    $('#qr-library-status').textContent=listStatus?t(listStatus):'';
+    $('#qr-library-status').textContent=listStatus?t(listStatus):atLimit()?t('itemLimit'):'';
+    $('#new-qr').disabled=busy||atLimit();
     const list=$('#qr-code-list'); list.replaceChildren();
     if (listStatus==='loadError') {const button=document.createElement('button');button.type='button';button.className='qr-add';button.textContent=t('retry');button.addEventListener('click',refresh);list.append(button);return;}
     for (const code of codes) {
@@ -196,7 +199,7 @@
     finally {setBusy(false);}
   }
   $('#new-qr').addEventListener('click',()=>{
-    if(busy)return;activeRecord=null;form.reset();switchType('url');clearPreview();status();dirty=false;
+    if(busy||atLimit())return;activeRecord=null;form.reset();switchType('url');clearPreview();status();dirty=false;
     eventIdentity={uid:crypto.randomUUID()+'@zprop.tech',created:new Date(),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone};
     $('#qr-timezone').textContent=eventIdentity.timeZone;syncEditor();setQuery();
     $('#qr-library').hidden=true;editor.hidden=false;form.elements.name.focus();

@@ -2,7 +2,8 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { publicOrigin } = require('../public-origin.js');
-const storage = path.resolve(__dirname, '../.short-links');
+const { assertRoom, created, removed } = require('./item-limit.cjs');
+const storage = path.join(require('./data-root.cjs')(), '.short-links');
 const fail = (code, status = 400) => Object.assign(new Error(code), { status });
 const validSlug = slug => /^[a-zA-Z0-9_-]{2,50}$/.test(slug);
 const directory = slug => path.join(storage, crypto.createHash('sha256').update(slug.toLowerCase()).digest('hex'));
@@ -63,7 +64,9 @@ async function create(req, ownerId) {
   const now = new Date().toISOString();
   const record = { slug, destination, ownerId, revision:1, createdAt:now, updatedAt:now };
   try {
+    await assertRoom(ownerId, 'short-links');
     await fs.writeFile(path.join(target, 'link.json'), JSON.stringify(record), { flag:'wx' });
+    created(ownerId, 'short-links');
   } catch (error) {
     // The request only owns this newly reserved hash directory.
     await release(target);
@@ -98,7 +101,7 @@ async function handle(req, slug, ownerId) {
   if(!slug || !['PUT','DELETE'].includes(req.method))throw fail('method',405);
   const previous=await owned(slug,ownerId), input=await body(req);
   if(input.revision!==(previous.revision||1))throw fail('conflict',409);
-  if(req.method==='DELETE') {await release(directory(slug));return {ok:true};}
+  if(req.method==='DELETE') {await release(directory(slug)); removed(ownerId,'short-links'); return {ok:true};}
   const next=await validate(req,input,previous.slug);
   const record={...previous,...next,revision:(previous.revision||1)+1,updatedAt:new Date().toISOString()};
   const source=directory(previous.slug),renamed=source!==directory(next.slug);

@@ -3,16 +3,17 @@ const slug=()=> 'link-'+require('node:crypto').randomBytes(6).toString('hex');
 
 test('creates a working short link, copies it and keeps results aligned with the form',async({page,request,baseURL},info)=>{
   const name=slug();
+  const origin=new URL(baseURL).origin;
   const destination=baseURL+'/landing.html?from=short-link';
   await page.goto('/tools/short-links.html?lang=en');
   await page.locator('#new-short-link').click();
   await expect(page.locator('[name=linkDomain]')).toHaveAttribute('readonly','');
-  await expect(page.locator('[name=linkDomain]')).toHaveValue('https://zprop.tech');
+  await expect(page.locator('[name=linkDomain]')).toHaveValue(origin);
   await page.locator('[name=url]').fill(destination);
   await page.locator('[name=slug]').fill(name);
   await page.getByRole('button',{name:'Create short link',exact:true}).click();
   await expect(page.locator('#link-result')).toBeVisible();
-  await expect(page.locator('#short-address')).toHaveText(`https://zprop.tech/${name}`);
+  await expect(page.locator('#short-address')).toHaveText(`${origin}/${name}`);
   const response=await request.get(`/${name}`,{maxRedirects:0});
   expect(response.status()).toBe(302);expect(response.headers().location).toBe(destination);
   // Keep the redirect destination on the test server as browser routing does
@@ -21,7 +22,7 @@ test('creates a working short link, copies it and keeps results aligned with the
   const popup=await popupPromise;await expect(popup).toHaveURL(new RegExp('/landing.html\\?from=short-link'));await popup.close();
   await page.evaluate(()=>{navigator.clipboard.writeText=async text=>{window.copiedLink=text;};});
   await page.locator('#copy-short-link').click();
-  expect(await page.evaluate(()=>window.copiedLink)).toBe(`https://zprop.tech/${name}`);
+  expect(await page.evaluate(()=>window.copiedLink)).toBe(`${origin}/${name}`);
   await page.locator('[data-language=ms]').click();
   await expect(page.locator('#link-result .draft-label')).toHaveText('PAUTAN DICIPTA');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

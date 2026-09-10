@@ -1,6 +1,6 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const root = path.resolve(__dirname, '..');
+const dataRoot = require('./data-root.cjs');
 
 async function entries(directory) {
   try { return await fs.readdir(directory, { withFileTypes:true }); }
@@ -18,7 +18,7 @@ async function summary(ownerId, includeLinks = false) {
   const modified = async filename => { try { return (await fs.stat(filename)).mtime.toISOString(); } catch(error) { if(error.code==='ENOENT') return null; throw error; } };
   await Promise.all([
     (async () => {
-      const directory = path.join(root, '.generated-sites');
+      const directory = path.join(dataRoot(), '.generated-sites');
       for (const entry of await entries(directory)) {
         if (!entry.isDirectory()) continue;
         const target = path.join(directory, entry.name);
@@ -34,7 +34,7 @@ async function summary(ownerId, includeLinks = false) {
       }
     })(),
     (async () => {
-      const directory = path.join(root, '.short-links');
+      const directory = path.join(dataRoot(), '.short-links');
       for (const entry of await entries(directory)) {
         if (!entry.isDirectory()) continue;
         const link = await record(path.join(directory, entry.name, 'link.json'));
@@ -42,21 +42,88 @@ async function summary(ownerId, includeLinks = false) {
       }
     })(),
     (async () => {
-      for (const entry of await entries(path.join(root, '.qr-codes', ownerId))) {
+      for (const entry of await entries(path.join(dataRoot(), '.qr-codes', ownerId))) {
         if (!entry.isFile() || !/^[0-9a-f-]{36}\.json$/.test(entry.name)) continue;
-        const qr = await record(path.join(root,'.qr-codes',ownerId,entry.name));
+        const qr = await record(path.join(dataRoot(),'.qr-codes',ownerId,entry.name));
         if (!qr) continue;
         add('qr-codes', { id:qr.id, name:qr.state.name, url:/^https?:\/\//i.test(qr.payload)?qr.payload:null, status:'saved', updatedAt:qr.updatedAt, revision:qr.revision, manageUrl:`/tools/qr-codes.html?qr=${qr.id}` });
       }
-      for (const entry of await entries(path.join(root, '.created-vcards', ownerId))) {
+      for (const entry of await entries(path.join(dataRoot(), '.created-vcards', ownerId))) {
         if (!entry.isFile() || !/^[a-f0-9]{64}\.json$/.test(entry.name)) continue;
-        const card=includeLinks?await record(path.join(root,'.created-vcards',ownerId,entry.name)):null;
-        add('vcards', { id:entry.name.slice(0,-5), name:card?.state?.name || 'vCard \u00b7 '+entry.name.slice(0,8), url:null, status:card?.state?'saved':'generated', updatedAt:card?.updatedAt || (includeLinks?await modified(path.join(root,'.created-vcards',ownerId,entry.name)):null), ...(card?.state?{revision:card.revision,manageUrl:'/tools/vcards.html?item='+entry.name.slice(0,-5)}:{}) });
+        const card=includeLinks?await record(path.join(dataRoot(),'.created-vcards',ownerId,entry.name)):null;
+        add('vcards', { id:entry.name.slice(0,-5), name:card?.state?.name || 'vCard \u00b7 '+entry.name.slice(0,8), url:null, status:card?.state?'saved':'generated', updatedAt:card?.updatedAt || (includeLinks?await modified(path.join(dataRoot(),'.created-vcards',ownerId,entry.name)):null), ...(card?.state?{revision:card.revision,manageUrl:'/tools/vcards.html?item='+entry.name.slice(0,-5)}:{}) });
       }
     })()
   ]);
   links.sort((a,b)=>(b.updatedAt || '').localeCompare(a.updatedAt || '') || a.category.localeCompare(b.category) || a.id.localeCompare(b.id));
   return { counts, total:Object.values(counts).reduce((sum, count) => sum + count, 0), ...(includeLinks?{links}:{}) };
+}
+
+async function peek(filename) {
+  let handle;
+  try { handle = await fs.open(filename, 'r'); }
+  catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+  try {
+    const buf = Buffer.alloc(512);
+    const { bytesRead } = await handle.read(buf, 0, buf.length, 0);
+    const text = buf.toString('utf8', 0, bytesRead);
+    const owner = text.match(/"ownerId"\s*:\s*"([0-9a-f-]{36})"/i);
+    if (!owner) return null;
+    return { ownerId:owner[1], file:/"kind"\s*:\s*"file"/.test(text) };
+  } finally { await handle.close(); }
+}
+async function ownerOf(filename) {
+  return (await peek(filename))?.ownerId || null;
+}
+
+async function countFor(ownerId, category, stopAt = Infinity) {
+  let count = 0;
+  const bump = () => ++count >= stopAt;
+  if (category === 'qr-codes') {
+    for (const entry of await entries(path.join(dataRoot(), '.qr-codes', ownerId))) {
+      if (entry.isFile() && /^[0-9a-f-]{36}\.json$/.test(entry.name) && bump()) break;
+    }
+    return count;
+  }
+  if (category === 'vcards') {
+    for (const entry of await entries(path.join(dataRoot(), '.created-vcards', ownerId))) {
+      if (entry.isFile() && /^[a-f0-9]{64}\.json$/.test(entry.name) && bump()) break;
+    }
+    return count;
+  }
+  const batch = async (items, visit) => {
+    for (let i = 0; i < items.length && count < stopAt; i += 32) {
+      const found = (await Promise.all(items.slice(i, i + 32).map(visit))).filter(Boolean).length;
+      count += found;
+    }
+    return Math.min(count, stopAt);
+  };
+  if (category === 'bio-pages') {
+    return batch(await entries(path.join(dataRoot(), '.generated-sites')), async entry => {
+      if (!entry.isDirectory()) return false;
+      return await ownerOf(path.join(dataRoot(), '.generated-sites', entry.name, '.bio.json')) === ownerId;
+    });
+  }
+  if (category === 'host-html') {
+    return batch(await entries(path.join(dataRoot(), '.generated-sites')), async entry => {
+      if (!entry.isDirectory()) return false;
+      const target = path.join(dataRoot(), '.generated-sites', entry.name);
+      if (await ownerOf(path.join(target, '.site.json')) !== ownerId) return false;
+      if (await ownerOf(path.join(target, '.bio.json'))) return false;
+      try { await fs.access(path.join(target, '.ready')); return true; }
+      catch (error) { if (error.code !== 'ENOENT') throw error; return false; }
+    });
+  }
+  if (category === 'short-links' || category === 'transfer-files') {
+    const directory = path.join(dataRoot(), '.short-links');
+    const files = category === 'transfer-files';
+    return batch(await entries(directory), async entry => {
+      if (!entry.isDirectory()) return false;
+      const link = await peek(path.join(directory, entry.name, 'link.json'));
+      return link?.ownerId === ownerId && !!link.file === files;
+    });
+  }
+  return 0;
 }
 
 async function trackVcard(req,ownerId) { return require('./vcards.cjs').handle(req,undefined,ownerId); }
@@ -71,12 +138,14 @@ async function remove(req, category, id, ownerId) {
     let item; try { item = await registry.read(id); } catch(error) { if(error.code==='ENOENT') throw fail(); throw error; }
     if (item.ownerId !== ownerId || (item.kind==='file') !== (category==='transfer-files')) throw fail();
     await registry.release(registry.directory(id));
+    require('./item-limit.cjs').removed(ownerId, category);
   } else if (category === 'host-html') {
     if (!/^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/.test(id)) throw fail();
-    const storage = path.join(root,'.generated-sites'), target = path.join(storage,id);
+    const storage = path.join(dataRoot(),'.generated-sites'), target = path.join(storage,id);
     if (path.dirname(target)!==storage || (await record(path.join(target,'.site.json')))?.ownerId!==ownerId || await record(path.join(target,'.bio.json'))) throw fail();
     await fs.rm(target,{recursive:true});
+    require('./item-limit.cjs').removed(ownerId, category);
   } else throw fail();
   return { ok:true };
 }
-module.exports = { summary, trackVcard, remove };
+module.exports = { summary, countFor, trackVcard, remove };

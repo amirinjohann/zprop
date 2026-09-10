@@ -14,7 +14,7 @@ const test=base.extend({
     const port=await new Promise(resolve=>{const listener=net.createServer();listener.listen(0,'127.0.0.1',()=>{const port=listener.address().port;listener.close(()=>resolve(port));});});
     let processHandle;
     const start=async()=>{
-      processHandle=spawn(process.execPath,['scripts/serve.cjs'],{cwd:root,windowsHide:true,env:{...process.env,PORT:String(port),HOST:'127.0.0.1',NODE_ENV:'test',AUTH_ORIGIN:'',AUTH_SECURE_COOKIE:'0',ADMIN_EMAIL:adminCredentials.email,ADMIN_PASSWORD:adminCredentials.password,ZPROP_ACCOUNTS_DIR:path.join(directory,'accounts'),ZPROP_ADMIN_DIR:path.join(directory,'admin')}});
+      processHandle=spawn(process.execPath,['scripts/serve.cjs'],{cwd:root,windowsHide:true,env:{...process.env,PORT:String(port),HOST:'127.0.0.1',NODE_ENV:'test',AUTH_ORIGIN:'',AUTH_SECURE_COOKIE:'0',ADMIN_EMAIL:adminCredentials.email,ADMIN_PASSWORD:adminCredentials.password,ZPROP_ACCOUNTS_DIR:path.join(directory,'accounts'),ZPROP_ADMIN_DIR:path.join(directory,'admin'),ZPROP_DATA_DIR:path.join(directory,'data')}});
       await new Promise((resolve,reject)=>{let output='';const timer=setTimeout(()=>reject(Error('Admin test server timeout: '+output)),15000);processHandle.stdout.on('data',chunk=>{output+=chunk;if(output.includes('ZPROP listening')){clearTimeout(timer);resolve();}});processHandle.stderr.on('data',chunk=>output+=chunk);processHandle.once('exit',code=>{clearTimeout(timer);reject(Error('Server exited '+code+': '+output));});});
     };
     const stop=async()=>{if(processHandle.exitCode!==null)return;await new Promise(resolve=>{processHandle.once('exit',resolve);processHandle.kill();});};
@@ -272,10 +272,13 @@ test('admins cannot access user APIs, mutate tool storage, or switch to a user w
   const administrator=await login(request);
   const slug='roles-'+crypto.randomBytes(6).toString('hex');
   const fingerprint=crypto.randomBytes(32).toString('hex');
-  const legacyDirectory=path.join(root,'.created-vcards',administrator.id);
+  const dataDir=path.join(adminServer.directory,'data');
+  const legacyDirectory=path.join(dataDir,'.created-vcards',administrator.id);
   await fs.mkdir(legacyDirectory,{recursive:true});
   const legacyFile=path.join(legacyDirectory,fingerprint+'.json');
   await fs.writeFile(legacyFile,'{}');
+  const previousData=process.env.ZPROP_DATA_DIR;
+  process.env.ZPROP_DATA_DIR=dataDir;
   const stats=require('../scripts/dashboard-stats.cjs');
   const beforeStorage=await stats.summary(administrator.id,true);
   const beforeReport=await (await request.get('/api/admin/overview')).json();
@@ -315,6 +318,7 @@ test('admins cannot access user APIs, mutate tool storage, or switch to a user w
     const owned=(await (await member.get('/api/dashboard-links')).json()).links;
     for(const link of owned)await member.delete('/api/dashboard-links/'+link.category+'/'+link.id,{data:{revision:link.revision}});
   } finally {
+    if(previousData===undefined)delete process.env.ZPROP_DATA_DIR;else process.env.ZPROP_DATA_DIR=previousData;
     await member.dispose();
     // Remove only the synthetic file created by this test, never existing content.
     await fs.unlink(legacyFile);

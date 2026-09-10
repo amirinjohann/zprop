@@ -3,6 +3,7 @@ const { createReadStream } = require('node:fs');
 const path = require('node:path');
 const { unzipSync } = require('fflate');
 const links = require('./short-links.cjs');
+const { assertRoom, created } = require('./item-limit.cjs');
 const MAX_BYTES = 50 * 1024 * 1024;
 const fail = (code, status = 400) => Object.assign(new Error(code), { status });
 const types = { '.pdf':'application/pdf', '.xls':'application/vnd.ms-excel', '.xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
@@ -33,6 +34,7 @@ async function create(req, url, ownerId) {
   if (!types[extension]) throw fail('fileType');
   if (filename.length > 180 || /[\x00-\x1f\x7f/\\]/.test(filename)) throw fail('fileName');
   if (Number(req.headers['content-length']) > MAX_BYTES) throw fail('fileSize', 413);
+  await assertRoom(ownerId, 'transfer-files');
   const claim = await links.reserve(url.searchParams.get('slug') || '');
   const file = path.join(claim.target, 'file.bin');
   let size = 0;
@@ -50,6 +52,7 @@ async function create(req, url, ownerId) {
     const record = { kind:'file', slug:claim.slug, filename, mime:types[extension], size };
     // Publish only after the complete upload has been checked.
     await fs.writeFile(path.join(claim.target, 'link.json'), JSON.stringify({ ...record, ownerId }), { flag:'wx' });
+    created(ownerId, 'transfer-files');
     return { ...record, url:`/${claim.slug}` };
   } catch (error) { await links.release(claim.target); throw error; }
 }

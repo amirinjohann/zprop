@@ -24,7 +24,7 @@ test('library creates, reopens, edits, renames and deletes the same item',async(
   expect((await request.get('/'+slug,{maxRedirects:0})).headers().location).toBe('https://example.com/updated');
   expect((await (await request.get('/api/dashboard-stats')).json()).counts['short-links']).toBe(1);
   const renamed=unique();await page.locator('[name=slug]').fill(renamed);await page.locator('#save-short-link').click();
-  await expect(page.locator('#short-address')).toHaveText('https://zprop.tech/'+renamed);
+  await expect(page.locator('#short-address')).toHaveText(new URL(page.url()).origin+'/'+renamed);
   expect((await request.get('/'+slug,{maxRedirects:0})).status()).toBe(404);
   expect((await request.get('/'+renamed,{maxRedirects:0})).headers().location).toBe('https://example.com/updated');
   await page.locator('#back-short-list').click();

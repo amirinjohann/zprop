@@ -12,7 +12,10 @@
   Object.assign(copy, {
     linkDomain:['Domain pautan','Link domain'], createLink:['Cipta pautan pendek','Create short link'], creatingLink:['Sedang mencipta pautan…','Creating your link…'], linkReady:['PAUTAN DICIPTA','LINK CREATED'], linkEmpty:['Pautan anda akan dipaparkan selepas dicipta.','Your link will appear here after creation.'], linkHint:['Nama pilihan: 2–50 huruf, nombor, sempang atau garis bawah. Biarkan kosong untuk nama rawak.','Optional name: 2–50 letters, numbers, hyphens or underscores. Leave empty for a random name.'], copyLink:['Salin pautan','Copy link'], openLink:['Buka pautan','Open link'], linkCopied:['Pautan disalin.','Link copied.'], linkCopyFailed:['Pilih dan salin alamat pautan di atas.','Select and copy the link address above.'], linkTaken:['Nama pautan sudah digunakan. Pilih nama lain.','This link name is already taken. Choose another name.'], linkSlug:['Gunakan 2–50 huruf, nombor, sempang atau garis bawah.','Use 2–50 letters, numbers, hyphens or underscores.'], linkLoop:['Destinasi tidak boleh menjadi pautan pendek itu sendiri.','The destination cannot be the short link itself.'], linkServer:['Pelayan tidak dapat menyimpan pautan. Cuba lagi.','The server could not save the link. Please try again.'], linkUnavailable:['Perkhidmatan pautan tidak tersedia buat masa ini. Sila cuba lagi.','The link service is unavailable right now. Please try again.'], linkNetwork:['Tidak dapat menghubungi pelayan. Semak sambungan anda dan cuba lagi.','Could not reach the server. Check your connection and try again.'], linkOrigin:['Permintaan ditolak. Buka alatan terus pada pelayan ZPROP.','Request rejected. Open the tool directly on the ZPROP server.'], linkSize:['URL terlalu panjang. Had ialah 4,096 aksara.','The URL is too long. The limit is 4,096 characters.'], linkRequest:['Maklumat pautan tidak sah. Semak dan cuba lagi.','The link details are invalid. Check them and try again.']
   });
-  Object.assign(copy,{saveVcard:['Simpan vCard','Save vCard'],cardSaved:['vCard disimpan.','vCard saved.'],cardSaving:['Menyimpan vCard...','Saving vCard...'],conflict:['vCard telah berubah. Buka semula sebelum menyimpan.','This vCard changed elsewhere. Reopen it before saving.'],cardStorage:['Butiran disimpan secara peribadi dalam akaun anda untuk diedit dan dimuat turun semula.','Details are saved privately to your account so you can edit and download them again.']});
+  Object.assign(copy, {
+    saveVcard:['Simpan vCard','Save vCard'],cardSaved:['vCard disimpan.','vCard saved.'],cardSaving:['Menyimpan vCard...','Saving vCard...'],conflict:['vCard telah berubah. Buka semula sebelum menyimpan.','This vCard changed elsewhere. Reopen it before saving.'],cardStorage:['Butiran disimpan secara peribadi dalam akaun anda untuk diedit dan dimuat turun semula.','Details are saved privately to your account so you can edit and download them again.'],
+    itemLimit:['Anda boleh menyimpan sehingga 5 item untuk alatan ini. Padam satu untuk menambah yang baharu.','You can save up to 5 items in this tool. Delete one to add another.']
+  });
   const t=key=>copy[key][language];
   copy.linkReserved=['Nama ini digunakan oleh laman web. Pilih nama pautan lain.','This name is used by the website. Choose another link name.'];
   copy.linkHint[0]+=' Nama mesti unik untuk semua pengguna. Huruf besar dan kecil dianggap sama.';
@@ -135,7 +138,7 @@
         library.saved(saved);
         if(action==='downloadVcard')download(window.ZpropVcard.format(saved.state),'zprop-contact.vcf','text/vcard;charset=utf-8');
         else status('cardSaved');
-      } catch(error) { status(error.message==='conflict'?'conflict':'storageError'); }
+      } catch(error) { status(copy[error.message]?error.message:'storageError'); }
       finally {form.removeAttribute('aria-busy');for(const control of form.querySelectorAll('input,button'))control.disabled=false;}
     }
     if(action==='downloadHtml'){

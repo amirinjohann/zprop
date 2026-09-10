@@ -22,6 +22,12 @@ function requireToolAccess(req) {
   if (!user || user.toolsBlocked) throw Object.assign(new Error(user ? "toolsBlocked" : "signInRequired"), {status:user ? 403 : 401});
 }
 let creationQueue = Promise.resolve(), pendingCreates = 0;
+function lockWrites() {
+  const previous = creationQueue;
+  let release;
+  creationQueue = new Promise(resolve => { release = resolve; });
+  return { previous, release };
+}
 const server = http.createServer(async (req, res) => {
   let pathname;
   try { pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); } catch { res.writeHead(400).end(); return; }
@@ -86,14 +92,12 @@ const server = http.createServer(async (req, res) => {
     const json = (status,data)=>res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'}).end(JSON.stringify(data));
     if(req.method!=='DELETE') {json(405,{error:'method'});return;}
     if(!auth.sameOrigin(req)) {json(403,{error:'origin'});return;}
-    if(pendingCreates>=8) {json(429,{error:'busy'});return;}
-    const previous=creationQueue;let release;
-    creationQueue=new Promise(resolve=>{release=resolve;});pendingCreates++;
+    const {previous,release}=lockWrites();
     await previous;
     try {
       requireToolAccess(req);json(200,await dashboardStats.remove(req,dashboardDelete[1],dashboardDelete[2],actingOwner));}
     catch(error) {json(error.status||500,{error:error.status?error.message:'server'});}
-    finally {pendingCreates--;release();}
+    finally {release();}
     return;
   }
   const vcardRoute=pathname.match(/^\/api\/vcards(?:\/([a-f0-9]{64}))?$/);
@@ -102,17 +106,15 @@ const server = http.createServer(async (req, res) => {
     const tracking = !!vcardRoute;
     if (!tracking && req.method !== 'GET') { json(405, { error:'method' }); return; }
     if (tracking && req.method!=='GET' && !auth.sameOrigin(req)) { json(403, { error:'origin' }); return; }
-    // Read a committed snapshot, without racing file replacement on Windows.
-    if(pendingCreates>=8) {json(429,{error:'busy'});return;}
-    const previous=creationQueue;let release;
-    creationQueue=new Promise(resolve=>{release=resolve;});pendingCreates++;
+    // Writes stay serialized. Reads wait for the same snapshot without a busy slot.
+    const {previous,release}=lockWrites();
     await previous;
     try {
       requireToolAccess(req);
       const ownerId = auth.session(req).user.id;
       json(200, await (tracking ? require('./vcards.cjs').handle(req,vcardRoute[1],ownerId) : dashboardStats.summary(ownerId, pathname==='/api/dashboard-links')));
     } catch (error) { json(error.status || 500, { error:error.status ? error.message : 'server' }); }
-    finally {pendingCreates--;release();}
+    finally {release();}
     return;
   }
   const bioRoute = pathname.match(/^\/api\/bio-pages(?:\/([a-z0-9-]+))?$/);
@@ -120,28 +122,24 @@ const server = http.createServer(async (req, res) => {
   if (bioRoute || qrRoute) {
     const json = (status, data) => res.writeHead(status, {'Content-Type':'application/json','Cache-Control':'no-store'}).end(JSON.stringify(data));
     if (req.method !== 'GET' && !auth.sameOrigin(req)) {json(403,{error:'origin'});return;}
-    if (pendingCreates >= 8) {json(429,{error:'busy'});return;}
-    const previous=creationQueue; let release;
-    creationQueue=new Promise(resolve=>{release=resolve;});pendingCreates++;
+    const {previous,release}=lockWrites();
     await previous;
     try {
       requireToolAccess(req);json(req.method==='POST'?201:200,await (qrRoute?qrCodes:bioPages).handle(req,(qrRoute||bioRoute)[1],auth.session(req).user.id));}
     catch(error){json(error.status||(qrRoute&&error.key?400:500),{error:error.status?error.message:qrRoute&&error.key?error.key:'server',...(qrRoute&&error.field?{field:error.field}:{})});}
-    finally{pendingCreates--;release();}
+    finally{release();}
     return;
   }
   const shortRoute = pathname.match(/^\/api\/short-links(?:\/([a-zA-Z0-9_-]+))?$/);
   if (shortRoute) {
     const json = (status, data) => res.writeHead(status, { 'Content-Type':'application/json', 'Cache-Control':'no-store' }).end(JSON.stringify(data));
     if (req.method!=='GET' && !auth.sameOrigin(req)) { json(403, { error:'linkOrigin' }); return; }
-    if(pendingCreates>=8) {json(429,{error:'busy'});return;}
-    const previous=creationQueue;let release;
-    creationQueue=new Promise(resolve=>{release=resolve;});pendingCreates++;
+    const {previous,release}=lockWrites();
     await previous;
     try {
       requireToolAccess(req); json(req.method==='POST'?201:200, await links.handle(req,shortRoute[1],actingOwner)); }
     catch (error) { json(error.status || 500, { error:error.status ? error.message : 'linkServer' }); }
-    finally {pendingCreates--;release();}
+    finally {release();}
     return;
   }
   if (['/api/static-sites','/api/file-links'].includes(pathname) && req.method === 'POST') {
@@ -149,9 +147,7 @@ const server = http.createServer(async (req, res) => {
     // Uploaded scripts run with an opaque origin and cannot call this endpoint.
     if (!auth.sameOrigin(req)) { json(403, { error:'origin' }); return; }
     if (pendingCreates >= 8) { json(429, { error:'busy' }); return; }
-    const previous = creationQueue;
-    let release;
-    creationQueue = new Promise(resolve => { release = resolve; });
+    const { previous, release } = lockWrites();
     pendingCreates++;
     await previous;
     try {

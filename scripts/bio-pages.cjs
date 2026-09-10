@@ -2,7 +2,8 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const {upgrade,socialPlatforms} = require('../bio-model.js');
-const storage = path.resolve(__dirname, '../.generated-sites');
+const { assertRoom, created, removed } = require('./item-limit.cjs');
+const storage = path.join(require('./data-root.cjs')(), '.generated-sites');
 const fail = (code, status = 400) => Object.assign(new Error(code), {status});
 function directory(slug) {
   if (typeof slug !== 'string' || !/^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/.test(slug)) throw fail('slugError');
@@ -100,17 +101,19 @@ async function handle(req,slug,ownerId) {
   }
   if(req.method==='POST'&&!slug) {
     const data=await body(req),target=directory(data?.slug),state=model(data.state,false);
+    await assertRoom(ownerId,'bio-pages');
     const record={ownerId,state,html:null,revision:1,updatedAt:new Date().toISOString()};
     await fs.mkdir(storage,{recursive:true});
     try{await fs.mkdir(target);}catch(error){if(error.code==='EEXIST')throw fail('taken',409);throw error;}
     try{await write(target,record);}catch(error){await fs.rmdir(target);throw error;}
+    created(ownerId,'bio-pages');
     return full(data.slug,record);
   }
   if(!slug)throw fail('method',405);
   const record=await owned(slug,ownerId);
   if(req.method==='DELETE') {
     // Ownership was verified and directory() confines this exact named page to storage.
-    await fs.rm(directory(slug),{recursive:true}); return {ok:true};
+    await fs.rm(directory(slug),{recursive:true}); removed(ownerId,'bio-pages'); return {ok:true};
   }
   if(req.method!=='PUT')throw fail('method',405);
   const data=await body(req),target=directory(slug);

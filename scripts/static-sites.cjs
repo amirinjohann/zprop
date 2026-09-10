@@ -6,7 +6,7 @@ const { unzipSync } = require('fflate');
 
 const MAX_BYTES = 256 * 1024 * 1024;
 const extensions = new Set('css js html jpg jpeg png ico svg gif webp ttf woff woff2 eot otf xml json mp3 wav mp4 webm pdf txt avif'.split(' '));
-const storage = path.resolve(__dirname, '../.generated-sites');
+const storage = path.join(require('./data-root.cjs')(), '.generated-sites');
 const fail = (code, status = 400) => Object.assign(new Error(code), { status });
 function safeName(name) {
   return name.length < 240 && !name.includes('\\') && name.split('/').every(part =>
@@ -47,12 +47,14 @@ if (!isMainThread) {
   try { parentPort.postMessage({ files: extract(new Uint8Array(workerData.data), workerData.type) }); }
   catch (error) { parentPort.postMessage({ error: error.status ? error.message : 'invalidZip', status: error.status || 400 }); }
 } else {
+  const { assertRoom, created } = require('./item-limit.cjs');
   async function create(req, url, ownerId) {
     const type = url.searchParams.get('type');
     if (!['html', 'zip'].includes(type)) throw fail('fileType');
     const requested = url.searchParams.get('slug') || '';
     if (requested && !/^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/.test(requested)) throw fail('slug');
     if (Number(req.headers['content-length']) > MAX_BYTES) throw fail('size', 413);
+    await assertRoom(ownerId, 'host-html');
     const chunks = []; let length = 0;
     for await (const chunk of req) {
       length += chunk.length;
@@ -84,6 +86,7 @@ if (!isMainThread) {
       if (path.dirname(directory) === storage) await fs.rm(directory, { recursive: true, force: true });
       throw error;
     }
+    created(ownerId, 'host-html');
     return { slug, url: `/sites/${slug}/`, files: Object.keys(files).length };
   }
   async function read(pathname) {
