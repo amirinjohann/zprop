@@ -133,3 +133,11 @@ Back up `.admin/` (usage/access history and tracking start date) alongside `.acc
 Run `npx playwright test tests/admin.spec.js --workers=1` for desktop/mobile admin checks, including authorization, restart persistence, restrictions, charts, exports and access-management dialogs.
 
 Automated Playwright tests now run on port 4174 with fresh accounts and admin history under private, ignored .test-data/ storage. They never reuse the live server on port 4173. Local-file preview tests intercept their fixed localhost URL and forward it to the isolated server. The one-time scripts/archive-test-accounts.cjs command previews recognized historical fixture accounts; --apply archives them under .accounts/.test-archive/ with a manifest. Archived accounts are preserved but excluded from signups, account lists, and usage reporting. Real accounts, including ordinary example.com addresses, are not filtered by email domain.
+
+## Admin-only permissions
+
+Administrator sessions are restricted to the admin dashboard. Opening the homepage, landing page, sign-in page, user tools, or the former /admin-account.html and /tools/profile.html settings pages redirects admins to the admin dashboard. Language and theme choices persist. Regular users retain their own profile page and tools.
+
+User tool APIs, personal-dashboard APIs and its event stream reject administrator sessions with HTTP 403 and error userAccountRequired, before any tool operations are executed. Queued operations also recheck permissions. Admin sessions retain admin reporting, user access management, read-only profile information, session checks and sign-out. Admin photo, email and password changes through the profile API are rejected with HTTP 403 and error adminAccountLocked, including before queued changes execute. Sign out before registering or signing into a regular account; authenticating the same admin account remains supported. Public shared content stays viewable, and existing admin-owned content is preserved without granting tool access.
+
+Role-separation and admin account-lock tests run against isolated test accounts and history. Existing account credentials and roles are preserved.

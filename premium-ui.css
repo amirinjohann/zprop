@@ -21,9 +21,9 @@ html[data-theme=dark] :is(.tool-page,.dashboard-page,.sign-in-page) {
 html :is(.tool-page,.dashboard-page,.sign-in-page)::before{display:none}
 html :is(.tool-page,.dashboard-page,.sign-in-page) .portal-shell{width:100%;max-width:1680px;padding:0 32px;margin:auto}
 html :is(.tool-page,.dashboard-page,.sign-in-page) .portal-header{height:98px;padding:0;gap:24px;margin-top:0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}
-html :is(.tool-page,.dashboard-page,.sign-in-page) .portal-brand{gap:13px;min-width:216px}
+html :is(.tool-page,.dashboard-page,.sign-in-page) .portal-brand{gap:13px;min-width:268px}
 html :is(.tool-page,.dashboard-page,.sign-in-page) .portal-logo{width:58px;height:58px;border-radius:15px;box-shadow:0 4px 14px #0002;object-fit:cover}
-html :is(.tool-page,.dashboard-page,.sign-in-page) .portal-brand strong{font-size:21px;letter-spacing:2.4px;color:var(--ink);line-height:1.2}
+html :is(.tool-page,.dashboard-page,.sign-in-page) .portal-brand strong{font-size:21px;letter-spacing:2.4px;color:var(--ink);line-height:1.2;white-space:nowrap}
 html :is(.tool-page,.dashboard-page,.sign-in-page) .portal-brand strong>span{color:var(--gold)}
 html :is(.tool-page,.dashboard-page,.sign-in-page) .portal-brand small{display:none}
 html :is(.tool-page,.dashboard-page,.sign-in-page) .portal-brand>span::after{content:'TECH / WORKSPACE';display:block;font-size:8px;font-weight:600;letter-spacing:2.1px;color:var(--muted);margin-top:6px}

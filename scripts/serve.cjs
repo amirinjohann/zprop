@@ -18,6 +18,7 @@ const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 
 Object.assign(types, { '.jpeg':'image/jpeg', '.gif':'image/gif', '.webp':'image/webp', '.avif':'image/avif', '.ico':'image/x-icon', '.woff':'font/woff', '.ttf':'font/ttf', '.otf':'font/otf', '.eot':'application/vnd.ms-fontobject', '.xml':'application/xml', '.mp3':'audio/mpeg', '.wav':'audio/wav', '.mp4':'video/mp4', '.webm':'video/webm', '.pdf':'application/pdf', '.txt':'text/plain; charset=utf-8' });
 function requireToolAccess(req) {
   const user = auth.session(req)?.user;
+  if (user?.role === "admin") throw Object.assign(new Error("userAccountRequired"), {status:403});
   if (!user || user.toolsBlocked) throw Object.assign(new Error(user ? "toolsBlocked" : "signInRequired"), {status:user ? 403 : 401});
 }
 let creationQueue = Promise.resolve(), pendingCreates = 0;
@@ -28,13 +29,18 @@ const server = http.createServer(async (req, res) => {
   if (pathname.includes('\\') || pathname.includes('\0') || pathname.split('/').some(part => part === '..' || /[. ]$/.test(part))) { res.writeHead(400).end(); return; }
   if (await auth.handle(req, res, pathname)) return;
   if (await admin.handle(req, res, pathname)) return;
-  if (/^\/admin(?:\.html|\/)?$/i.test(pathname) || /^\/admin\.js$/i.test(pathname)) {
+  const adminTarget = target => {
+    const lang = new URL(req.url, 'http://localhost').searchParams.get('lang');
+    return target + (['en','ms'].includes(lang) ? '?lang=' + lang : '');
+  };
+  if (/^\/admin(?:-account)?(?:\.html|\/)?$/i.test(pathname) || /^\/admin(?:-account)?\.js$/i.test(pathname)) {
     res.setHeader('Cache-Control','no-store');
     res.setHeader('Vary','Cookie');
     const user = auth.session(req)?.user;
-    if (!user) { res.writeHead(302,{Location:'/sign-in.html?lang=en&next=/admin.html'}).end(); return; }
+    if (!user) { const target = '/admin.html'; res.writeHead(302,{Location:'/sign-in.html?lang='+(new URL(req.url,'http://localhost').searchParams.get('lang') === 'ms' ? 'ms' : 'en')+'&next='+encodeURIComponent(target)}).end(); return; }
     if (user.role !== 'admin') { res.writeHead(403,{'Content-Type':'text/plain; charset=utf-8'}).end('Administrator access required.'); return; }
-    if (/^\/admin\/?$/i.test(pathname)) { res.writeHead(302,{Location:'/admin.html'}).end(); return; }
+    if (/^\/admin-account\.js$/i.test(pathname)) { res.writeHead(404).end('Not found'); return; }
+    if (/^\/admin-account(?:\.html|\/)?$/i.test(pathname) || /^\/admin\/?$/i.test(pathname)) { res.writeHead(302,{Location:adminTarget('/admin.html')}).end(); return; }
   }
   const protectedPage = /^\/tools(?:\/|$)/i.test(pathname) || /^\/(tool-pages|static-site|bio-page|bio-library|qr-page|short-links-page)\.js$/i.test(pathname);
   if (protectedPage || pathname.startsWith('/api/')) {
@@ -50,6 +56,16 @@ const server = http.createServer(async (req, res) => {
     }
   }
   const actor = auth.session(req)?.user;
+  if (actor?.role === 'admin') {
+    if (pathname.startsWith('/api/')) {
+      res.writeHead(403,{'Content-Type':'application/json'}).end(JSON.stringify({error:'userAccountRequired'})); return;
+    }
+    if (/^\/(?:index\.html|landing\.html|sign-in\.html)?$/i.test(pathname) || /^\/tools(?:\/|$)/i.test(pathname)) {
+      const target = '/admin.html';
+      res.writeHead(302,{'Cache-Control':'no-store',Vary:'Cookie',Location:adminTarget(target)}).end(); return;
+    }
+    if (protectedPage) { res.writeHead(403,{'Content-Type':'application/json'}).end(JSON.stringify({error:'userAccountRequired'})); return; }
+  }
   if (actor?.toolsBlocked && !/^\/tools\/profile\.html$/i.test(pathname) && (protectedPage || /^\/api\/(bio-pages|qr-codes|short-links|file-links|static-sites|vcards|dashboard-links)(\/|$)/.test(pathname))) {
     if (pathname.startsWith('/api/')) res.writeHead(403,{'Content-Type':'application/json'}).end(JSON.stringify({error:'toolsBlocked'}));
     else res.writeHead(302,{Location:'/access-denied.html'}).end();

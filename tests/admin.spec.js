@@ -142,8 +142,8 @@ test('usage counts all six tools, saves and repeat actions while excluding delet
     for(const tool of report.tools)expect(tool.uses).toBe(before.tools.find(item=>item.id===tool.id).uses+1);
     expect((await member.put('/api/qr-codes/'+code.id,{data:{...qrInput,revision:code.revision}})).status()).toBe(200);
     expect((await member.post('/api/vcards',{data:{id:fingerprint}})).status()).toBe(200);
-    expect((await request.post('/api/vcards',{data:{id:fingerprint}})).status()).toBe(200);
-    expect((await request.delete('/api/vcards/'+fingerprint)).status()).toBe(200);
+    expect((await request.post('/api/vcards',{data:{id:fingerprint}})).status()).toBe(403);
+    expect((await request.delete('/api/vcards/'+fingerprint)).status()).toBe(403);
     const links=(await (await member.get('/api/dashboard-links')).json()).links;
     for(const link of links)expect((await member.delete('/api/dashboard-links/'+link.category+'/'+link.id,{data:{revision:link.revision}})).status()).toBe(200);
     report=await (await request.get('/api/admin/overview')).json();
@@ -197,7 +197,7 @@ test('admin language and dark mode persist, with translated data and access dial
   await expect(page.locator('#user-rows')).toContainText('Tiada pengguna');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:'test-results/admin-dark-bm-'+info.project.name+'.png',fullPage:true});
-  await page.getByRole('button',{name:'BI',exact:true}).click();
+  await page.getByRole('button',{name:'EN',exact:true}).click();
   await expect(page.locator('h1')).toContainText('Admin overview');
   await expect(page.locator('#user-rows')).toContainText('No users match');
   await expect(page.locator('#search')).toHaveValue('no-matching-account');
@@ -240,23 +240,127 @@ test('user totals match stored accounts across filters, restrictions, archives a
   } finally {await member.dispose();}
 });
 
-test('admin profile survives restart without reseeding and recovers a pending email change',async({request,adminServer})=>{
-  await login(request);
-  const email='changed-admin-'+crypto.randomUUID()+'@example.com',newPassword='Changed-admin-123!';
-  const changed=await request.patch('/api/auth/profile',{data:{email,newPassword,currentPassword:adminCredentials.password}});
-  expect(changed.status()).toBe(200);const id=(await changed.json()).user.id;
-  await adminServer.restart();
-  expect((await request.post('/api/auth/sign-in',{data:adminCredentials})).status()).toBe(401);
-  expect((await request.post('/api/auth/sign-in',{data:{email,password:newPassword}})).status()).toBe(200);
-  const summary=await (await request.get('/api/admin/overview')).json();expect(summary.metrics.administrators).toBe(1);
+test('admin account changes are denied without changing stored credentials or sessions',async({request,adminServer})=>{
+  const administrator=await login(request);
   const directory=path.join(adminServer.directory,'accounts');
-  const from=crypto.createHash('sha256').update(email).digest('hex')+'.json';
-  const to=crypto.createHash('sha256').update(adminCredentials.email).digest('hex')+'.json';
-  const account=JSON.parse(await fs.readFile(path.join(directory,from),'utf8'));account.email=adminCredentials.email;
-  await fs.writeFile(path.join(directory,'.profile-change.json'),JSON.stringify({from,to,account}));
+  const snapshot=async()=>{const files=await fs.readdir(directory);return Promise.all(files.filter(name=>name.endsWith('.json')).sort().map(async name=>[name,await fs.readFile(path.join(directory,name),'utf8')]));};
+  const before=await snapshot();
+  for(const data of [
+    {email:'changed-admin@example.com',currentPassword:adminCredentials.password},
+    {newPassword:'Changed-admin-123!',currentPassword:adminCredentials.password},
+    {avatar:null},
+    {avatar:'data:image/png;base64,'+await fs.readFile(path.join(root,'assets/zprop-tech-logo-clean.png'),'base64')}
+  ]) {
+    const response=await request.patch('/api/auth/profile',{data});
+    expect(response.status()).toBe(403);expect(await response.json()).toEqual({error:'adminAccountLocked'});
+  }
+  for(const method of ['POST','PUT','DELETE']) {
+    const response=await request.fetch('/api/auth/profile',{method,data:{email:'denied@example.com'}});
+    expect(response.status()).toBe(403);
+  }
+  expect(await snapshot()).toEqual(before);
+  expect((await (await request.get('/api/auth/session')).json()).user).toMatchObject({id:administrator.id,email:adminCredentials.email,role:'admin'});
+  expect((await request.get('/api/admin/overview')).status()).toBe(200);
   await adminServer.restart();
-  const recovered=await request.post('/api/auth/sign-in',{data:{email:adminCredentials.email,password:newPassword}});expect(recovered.status()).toBe(200);
-  expect((await recovered.json()).user).toMatchObject({id,role:'admin'});
-  expect((await fs.readdir(directory)).includes(from)).toBe(false);
-  expect((await request.patch('/api/auth/profile',{data:{currentPassword:newPassword,newPassword:adminCredentials.password}})).status()).toBe(200);
+  expect(await login(request)).toMatchObject({id:administrator.id,email:adminCredentials.email,role:'admin'});
+  expect(await snapshot()).toEqual(before);
+});
+
+test('admins cannot access user APIs, mutate tool storage, or switch to a user without signing out',async({request,baseURL,adminServer})=>{
+  const member=await requests.newContext({baseURL});
+  const user=await register(member);
+  const administrator=await login(request);
+  const slug='roles-'+crypto.randomBytes(6).toString('hex');
+  const fingerprint=crypto.randomBytes(32).toString('hex');
+  const legacyDirectory=path.join(root,'.created-vcards',administrator.id);
+  await fs.mkdir(legacyDirectory,{recursive:true});
+  const legacyFile=path.join(legacyDirectory,fingerprint+'.json');
+  await fs.writeFile(legacyFile,'{}');
+  const stats=require('../scripts/dashboard-stats.cjs');
+  const beforeStorage=await stats.summary(administrator.id,true);
+  const beforeReport=await (await request.get('/api/admin/overview')).json();
+  try {
+    const routes=['bio-pages','short-links','file-links','static-sites','qr-codes','vcards','dashboard-links','dashboard-stats','dashboard-events'];
+    for(const route of routes)for(const method of ['GET','POST','PUT','PATCH','DELETE']) {
+      const response=await request.fetch('/api/'+route,{method,data:method==='GET'?undefined:{id:fingerprint,slug,destination:'https://example.com'}});
+      expect(response.status(),method+' '+route).toBe(403);
+      expect(await response.json()).toEqual({error:'userAccountRequired'});
+    }
+    for(const route of ['vcards/'+fingerprint,'bio-pages/'+slug,'qr-codes/'+crypto.randomUUID(),'short-links/'+slug,'dashboard-links/vcards/'+fingerprint]) {
+      for(const method of ['GET','PUT','DELETE']) {
+        const response=await request.fetch('/api/'+route,{method,data:method==='GET'?undefined:{revision:1}});
+        expect(response.status()).toBe(403);expect((await response.json()).error).toBe('userAccountRequired');
+      }
+    }
+    expect((await request.post('/api/file-links?name=roles.pdf',{data:Buffer.from('%PDF-1.4\nTest'),headers:{'Content-Type':'application/pdf'}})).status()).toBe(403);
+    expect((await request.post('/api/static-sites?type=html',{data:'<h1>Denied</h1>',headers:{'Content-Type':'text/html'}})).status()).toBe(403);
+    const registration=await request.post('/api/auth/register',{data:{email:'roles-'+crypto.randomUUID()+'@example.com',password}});
+    expect(registration.status()).toBe(403);expect((await registration.json()).error).toBe('userAccountRequired');
+    expect((await request.post('/api/auth/sign-in',{data:{email:user.email,password}})).status()).toBe(403);
+    expect((await (await request.get('/api/auth/session')).json()).user.role).toBe('admin');
+    expect((await request.get('/api/auth/profile')).status()).toBe(200);
+    expect(await stats.summary(administrator.id,true)).toEqual(beforeStorage);
+    expect(await fs.readFile(legacyFile,'utf8')).toBe('{}');
+    const afterReport=await (await request.get('/api/admin/overview')).json();
+    expect(afterReport.metrics).toEqual(beforeReport.metrics);
+    expect(afterReport.series).toEqual(beforeReport.series);
+    expect(afterReport.audit).toEqual(beforeReport.audit);
+    expect((await member.post('/api/short-links',{data:{slug,destination:'https://example.com'}})).status()).toBe(201);
+    expect((await request.get('/'+slug,{maxRedirects:0})).headers().location).toBe('https://example.com/');
+    expect((await request.get('/s/'+slug,{maxRedirects:0})).status()).toBe(302);
+    await request.post('/api/auth/sign-out');
+    expect((await request.post('/api/auth/sign-in',{data:{email:user.email,password}})).status()).toBe(200);
+    expect((await request.get('/tools/vcards.html')).status()).toBe(200);
+    expect((await request.get('/admin-account.html')).status()).toBe(403);
+    const owned=(await (await member.get('/api/dashboard-links')).json()).links;
+    for(const link of owned)await member.delete('/api/dashboard-links/'+link.category+'/'+link.id,{data:{revision:link.revision}});
+  } finally {
+    await member.dispose();
+    // Remove only the synthetic file created by this test, never existing content.
+    await fs.unlink(legacyFile);
+  }
+});
+
+test('admin navigation excludes account settings and preserves language and theme',async({page,request,baseURL},info)=>{
+  const anonymous=await requests.newContext({baseURL});
+  const regular=await requests.newContext({baseURL});
+  await register(regular);
+  try {
+    expect((await anonymous.get('/admin-account.html',{maxRedirects:0})).status()).toBe(302);
+    expect((await regular.get('/admin-account.html')).status()).toBe(403);
+    await login(page.request);
+    const paths=['/','/index.html','/landing.html','/sign-in.html','/tools/dashboard.html','/tools/bio-pages.html','/tools/short-links.html','/tools/transfer-files.html','/tools/vcards.html','/tools/host-html.html','/tools/qr-codes.html','/TOOLS/VCARDS.HTML','/%74ools/vcards.html'];
+    for(const path of paths) {
+      const response=await page.request.get(path+'?lang=ms',{maxRedirects:0});
+      expect(response.status(),path).toBe(302);expect(response.headers().location).toBe('/admin.html?lang=ms');
+      expect(response.headers()['cache-control']).toBe('no-store');
+    }
+    expect((await page.request.get('/tools/profile.html?lang=en',{maxRedirects:0})).headers().location).toBe('/admin.html?lang=en');
+    const errors=[];page.on('pageerror',error=>errors.push(error.message));
+    await page.goto('/landing.html?lang=en');
+    await expect(page).toHaveURL(/\/admin.html\?lang=en$/);
+    await expect(page.locator('a[href*="tools/"], a[href*="landing.html"], a[href*="index.html"]')).toHaveCount(0);
+    await expect(page.getByRole('link',{name:'Manage account',exact:true})).toHaveCount(0);
+    await expect(page.locator('a[href*="admin-account"], a[href*="profile.html"]')).toHaveCount(0);
+    for(const path of ['/admin-account.html','/admin-account','/admin-account/','/ADMIN-ACCOUNT.HTML']) {
+      const response=await page.request.get(path+'?lang=en',{maxRedirects:0});
+      expect(response.status()).toBe(302);expect(response.headers().location).toBe('/admin.html?lang=en');
+    }
+    expect((await page.request.get('/admin-account.js')).status()).toBe(404);
+    await page.goto('/admin-account.html?lang=en');await expect(page).toHaveURL(/\/admin.html\?lang=en$/);
+    await expect(page.locator('#profile-email')).toHaveCount(0);
+    expect((await (await page.request.get('/api/auth/session')).json()).user.role).toBe('admin');
+    await page.locator('.theme-toggle').click();
+    await page.getByRole('button',{name:'BM',exact:true}).click();
+    await expect(page.locator('html')).toHaveAttribute('lang','ms');
+    await page.reload();await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
+    await expect(page.locator('html')).toHaveAttribute('lang','ms');
+    await expect(page.locator('a[href*="admin-account"], a[href*="profile.html"]')).toHaveCount(0);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await page.goto('/tools/profile.html?lang=ms');await expect(page).toHaveURL(/\/admin.html\?lang=ms$/);
+    await page.goBack();await expect(page).toHaveURL(/\/admin.html/);
+    expect(errors).toEqual([]);
+    await page.locator('#sign-out').click();await expect(page).toHaveURL(/sign-in.html/);
+    expect((await page.request.get('/admin-account.html',{maxRedirects:0})).status()).toBe(302);
+  } finally {await anonymous.dispose();await regular.dispose();}
 });

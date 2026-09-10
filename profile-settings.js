@@ -41,7 +41,8 @@
     if(source){if($('settings-avatar').getAttribute('src')!==source)$('settings-avatar').src=source;}
     else $('settings-avatar').removeAttribute('src');
     $('settings-avatar').hidden=!source;$('settings-avatar-placeholder').toggleAttribute('hidden',!!source);
-    window.ZpropLanguage?.ready();window.ZpropNavigation?.ready();
+    window.ZpropLanguage?.ready();
+    window.ZpropNavigation?.ready();
   }
   async function api(options) {
     const response=await window.ZpropAuth.fetch('/api/auth/profile',{cache:'no-store',...options});

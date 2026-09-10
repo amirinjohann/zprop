@@ -144,6 +144,7 @@ function validateAvatar(value) {
 }
 async function profileRequest(req,res,pathname) {
   if (!session(req)) throw fail('signInRequired',401);
+  if (session(req).user.role==='admin' && req.method!=='GET') throw fail('adminAccountLocked',403);
   if (req.method==='GET') return queued(async () => {
     const actor=session(req)?.user;if(!actor)throw fail('signInRequired',401);
     const account=JSON.parse(await fs.readFile(path.join(storage,hash(actor.email)+'.json'),'utf8'));
@@ -159,6 +160,7 @@ async function profileRequest(req,res,pathname) {
   if(!keys.some(key=>['email','newPassword','avatar'].includes(key)))throw fail('request');
   await queued(async () => {
     const actor=session(req)?.user;if(!actor)throw fail('signInRequired',401);
+    if(actor.role==='admin')throw fail('adminAccountLocked',403);
     const filename=path.join(storage,hash(actor.email)+'.json');
     const account=JSON.parse(await fs.readFile(filename,'utf8'));
     const sensitive=Object.hasOwn(data,'email')||Object.hasOwn(data,'newPassword');
@@ -213,6 +215,7 @@ async function handle(req, res, pathname) {
       res.setHeader('Set-Cookie', cookie(req, '', 0)); json(res, 200, { ok:true }); return true;
     }
     if (!['/api/auth/sign-in', '/api/auth/register'].includes(pathname)) throw fail('notFound', 404);
+    if (pathname.endsWith('/register') && session(req)?.user.role === 'admin') throw fail('userAccountRequired',403);
     const ip = req.socket.remoteAddress;
     let limit = attempts.get(ip);
     if (!limit || limit.until <= Date.now()) { limit = { count:0, until:Date.now() + 15 * 60 * 1000 }; attempts.set(ip, limit); }
@@ -222,6 +225,8 @@ async function handle(req, res, pathname) {
     const password = data?.password;
     if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || typeof password !== 'string' || !password.length || password.length > 128) throw fail('request');
     await queued(async () => {
+    const actor = session(req)?.user;
+    if (actor?.role === 'admin' && (pathname.endsWith('/register') || email !== actor.email)) throw fail('userAccountRequired',403);
     const filename = path.join(storage, hash(email) + '.json');
     let account;
     if (pathname.endsWith('/register')) {

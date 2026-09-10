@@ -8,7 +8,7 @@
     '← Back to website':'← Kembali ke laman web', 'Sign out':'Log keluar',
     'WORKSPACE / OVERVIEW':'RUANG KERJA / RINGKASAN', 'Admin overview':'Ringkasan admin',
     'A clear view of your users and the tools they use.':'Pantau pengguna dan penggunaan alatan mereka.',
-    'Administrator':'Pentadbir', 'Manage account':'Urus akaun', 'Language':'Bahasa', 'Workspace activity':'Aktiviti ruang kerja',
+    'Administrator':'Pentadbir', 'Language':'Bahasa', 'Workspace activity':'Aktiviti ruang kerja',
     'Period':'Tempoh', 'Last 7 days':'7 hari terakhir', 'Last 30 days':'30 hari terakhir', 'Last 90 days':'90 hari terakhir',
     'Refresh':'Muat semula', 'Export users':'Eksport pengguna', 'Total users':'Jumlah pengguna',
     'Registered users; administrators excluded.':'Pengguna berdaftar; tidak termasuk pentadbir.',
@@ -80,7 +80,7 @@
     });
     document.querySelectorAll('[data-language]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.language === language())));
     document.querySelectorAll('[data-admin-local]').forEach(link => { const target = new URL(link.href); target.searchParams.set('lang', language()); link.href = target; });
-    document.title = t('Admin overview — ZPROP');
+    document.title = t('Admin overview \u2014 ZPROP');
     window.ZpropLanguage?.ready();
     document.dispatchEvent(new Event('zprop:language'));
   }

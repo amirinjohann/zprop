@@ -6,6 +6,8 @@
   const isToolUrl = url => url.origin === appBase.origin && url.pathname.startsWith(appBase.pathname + 'tools/');
   const isTool = isToolUrl(new URL(location.href));
   const isProfile = document.body.dataset.tool === 'profile';
+  const isAdminArea = /^admin(?:-account)?\.html$/i.test(location.pathname.slice(appBase.pathname.length));
+  const isProtected = isTool || isAdminArea;
   const toolLinks = [...document.querySelectorAll('a[href]')]
     .map(link => ({ link, target:new URL(link.href) }))
     .filter(({ target }) => isToolUrl(target));
@@ -23,12 +25,14 @@
     ms:{ title:'Log masuk ke ZPROP.', registerTitle:'Cipta akaun anda.', subtitle:'Log masuk untuk menggunakan kesemua enam alatan ZPROP.', notice:'Satu akaun untuk semua alatan anda. Log masuk atau cipta akaun untuk bermula.', register:'Cipta akaun', signIn:'Log masuk', signOut:'Log keluar', switchRegister:'Pengguna baharu? Cipta akaun', switchSignIn:'Sudah mempunyai akaun? Log masuk', passwordHint:'Gunakan 12–128 aksara untuk akaun baharu.', placeholder:'Masukkan kata laluan anda', credentials:'E-mel atau kata laluan tidak betul.', exists:'Akaun dengan e-mel ini sudah wujud. Sila log masuk.', password:'Gunakan sekurang-kurangnya 12 aksara untuk kata laluan.', request:'Masukkan e-mel dan kata laluan yang sah (sehingga 128 aksara).', rateLimit:'Terlalu banyak percubaan. Cuba lagi dalam 15 minit.', server:'Tidak dapat menghubungi pelayan. Semak sambungan anda dan cuba lagi.', origin:'Buka halaman ini terus pada pelayan ZPROP dan cuba lagi.', working:'Sila tunggu…', browsing:'Terokai alatan sebelum log masuk.', forgot:'Pemulihan kata laluan belum tersedia. Hubungi pentadbir ZPROP untuk bantuan.', welcome:'RUANG KERJA ZPROP ANDA' }
   };
   Object.assign(messages.en, {
+    userAccountRequired:'Sign out of the administrator account before using a regular user account.',
     signInBlocked:'Your account has been blocked from signing in. Contact your administrator.',
     newPassword:'New password', confirmPassword:'Confirm password',
     confirmPlaceholder:'Enter your new password again',
     passwordMismatch:'Passwords do not match. Please enter the same password in both fields.'
   });
   Object.assign(messages.ms, {
+    userAccountRequired:'Log keluar daripada akaun pentadbir sebelum menggunakan akaun pengguna biasa.',
     signInBlocked:'Akaun anda disekat daripada log masuk. Hubungi pentadbir anda.',
     newPassword:'Kata laluan baharu', confirmPassword:'Sahkan kata laluan',
     confirmPlaceholder:'Masukkan kata laluan baharu sekali lagi',
@@ -42,12 +46,23 @@
     if (next) url.searchParams.set('next', next.pathname + next.search + next.hash);
     return url.href;
   }
+  function adminDestination() {
+    return new URL('admin.html?lang='+language(),appBase).href;
+  }
+  function routeAdmin() {
+    if (user?.role !== 'admin' || isAdminArea) return false;
+    const relative = location.pathname.slice(appBase.pathname.length);
+    if (isTool || /^(?:index\.html|landing\.html|sign-in\.html)?$/i.test(relative)) {
+      document.body.style.visibility = 'hidden'; location.replace(adminDestination()); return true;
+    }
+    return false;
+  }
   function destination() {
     const next = new URLSearchParams(location.search).get('next');
     try {
       const url = new URL(next || 'landing.html', appBase);
       const relative = url.pathname.startsWith(appBase.pathname) ? url.pathname.slice(appBase.pathname.length) : null;
-      if (url.origin === appBase.origin && relative !== null && /^(?:tools\/[a-z-]+\.html|landing\.html|index\.html|admin\.html)?$/.test(relative)) {
+      if (url.origin === appBase.origin && relative !== null && /^(?:tools\/[a-z-]+\.html|landing\.html|index\.html|admin(?:-account)?\.html)?$/.test(relative)) {
         url.searchParams.set('lang', language()); return url.href;
       }
     } catch {}
@@ -71,19 +86,21 @@
     return;
   }
   function redirect() {
-    if (isTool) document.body.style.visibility = 'hidden';
+    if (isProtected) document.body.style.visibility = 'hidden';
     location.replace(signInUrl(new URL(location.href)));
   }
   async function authFetch(url, options) {
     const response = await fetch(url, { credentials:'same-origin', ...options });
-    if (response.status === 401 && isTool) redirect();
+    if (response.status === 401 && isProtected) redirect();
     if (response.status === 403 && isTool) {
       const data = await response.clone().json().catch(() => ({}));
+      if (data.error === 'userAccountRequired') { location.replace(adminDestination()); return response; }
       if (data.error === "toolsBlocked") location.replace(new URL("access-denied.html", appBase));
     }
     return response;
   }
   function render() {
+    if (routeAdmin()) return;
     toolLinks.forEach(({ link, target }) => {
       const url = new URL(target);
       url.searchParams.set('lang', language());
@@ -93,7 +110,7 @@
       if (user) { link.textContent = t('signOut'); link.href = '#sign-out'; link.setAttribute('role', 'button'); }
       else { link.textContent = t('signIn'); link.href = signInUrl(); link.removeAttribute('role'); }
     });
-    if (user?.role === "admin" && !document.querySelector("[data-admin-link]")) {
+    if (user?.role === "admin" && !isAdminArea && !document.querySelector("[data-admin-link]")) {
       const anchor = document.querySelector(".nav-sign-in");
       if (anchor) { const link = document.createElement("a"); link.href = new URL("admin.html", appBase); link.textContent = "Admin"; link.dataset.adminLink = "true"; anchor.before(link); }
     }
@@ -175,18 +192,20 @@
       }
       if (!response.ok) throw new Error();
       user = (await response.json()).user;
-      if (isTool && !user) { redirect(); return false; }
+      if (isProtected && !user) { redirect(); return false; }
+      if (isAdminArea && user?.role !== 'admin') { location.replace(new URL('landing.html?lang='+language(),appBase)); return false; }
+      if (routeAdmin()) return false;
       if (isTool && !isProfile && user?.toolsBlocked) { location.replace(new URL("access-denied.html", appBase)); return false; }
       render(); return !!user;
     } catch {
       user = null;
       render();
-      if (isTool) redirect();
+      if (isProtected) redirect();
       return false;
     }
   }
   render();
-  window.ZpropAuth = { ready:user ? Promise.resolve(true) : check(), fetch:authFetch, getUser:() => user, refresh:check };
+  window.ZpropAuth = { ready:user ? Promise.resolve(!routeAdmin()) : check(), fetch:authFetch, getUser:() => user, refresh:check };
   window.addEventListener('storage',event=>{if(event.key==='zprop-profile-updated')check();});
   toolLinks.forEach(({ link }) => link.addEventListener('click', async event => {
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
@@ -198,5 +217,5 @@
   document.addEventListener('zprop:language', render);
   window.addEventListener('pageshow', event => { if (event.persisted) check(); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
-  if (isTool) setInterval(check, 60000);
+  if (isProtected) setInterval(check, 60000);
 })();
