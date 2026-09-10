@@ -74,8 +74,8 @@ async function summary(days, toolFilter) {
   }
   users.sort((a,b) => b.uses-a.uses || a.email.localeCompare(b.email));
   return {
-    startedAt, days, toolFilter, timezone:'Asia/Kuala_Lumpur', series,
-    metrics:{ totalUsers:users.length, newUsers:series.reduce((sum,p) => sum+p.signups,0), uses:series.reduce((sum,p) => sum+p.uses,0), allTimeUses, activeUsers:users.filter(user => user.uses > 0).length, toolsBlocked:users.filter(user => user.toolsBlocked).length, signInBlocked:users.filter(user => user.signInBlocked).length },
+    startedAt, generatedAt:new Date().toISOString(), days, toolFilter, timezone:'Asia/Kuala_Lumpur', series,
+    metrics:{ totalUsers:users.length, administrators:accounts.filter(user => user.role === 'admin').length, newUsers:series.reduce((sum,p) => sum+p.signups,0), uses:series.reduce((sum,p) => sum+p.uses,0), allTimeUses, activeUsers:users.filter(user => user.uses > 0).length, toolsBlocked:users.filter(user => user.toolsBlocked).length, signInBlocked:users.filter(user => user.signInBlocked).length },
     tools:Object.entries(tools).map(([id,name]) => ({ id,name,uses:totals[id] })),
     users,
     audit:history.filter(event => event.type === 'access').slice(-50).reverse().map(event => ({ ...event, email:byId.get(event.userId)?.email || event.userId }))

@@ -15,7 +15,35 @@ const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const fail = (error, status = 400) => Object.assign(new Error(error), { status });
 const json = (res, status, body) => res.writeHead(status, { 'Content-Type':'application/json', 'Cache-Control':'no-store' }).end(JSON.stringify(body));
 const token = req => (req.headers.cookie || '').split(';').map(part => part.trim()).find(part => part.startsWith('zprop_session='))?.slice(14);
-const publicUser = account => ({ id:account.id, email:account.email, role:account.role === 'admin' ? 'admin' : 'user', toolsBlocked:!!account.toolsBlocked });
+const publicUser = account => ({ id:account.id, email:account.email, role:account.role === 'admin' ? 'admin' : 'user', toolsBlocked:!!account.toolsBlocked, avatarUrl:account.avatar ? '/api/auth/avatar?v='+hash(account.avatar).slice(0,16) : null });
+const journal = path.join(storage, '.profile-change.json');
+async function atomicWrite(filename, value) {
+  const temporary = filename + '.' + crypto.randomUUID() + '.tmp';
+  try { await fs.writeFile(temporary, JSON.stringify(value), { flag:'wx', mode:0o600 }); await fs.rename(temporary, filename); }
+  finally { await fs.rm(temporary, { force:true }); }
+}
+async function recoverProfileChange() {
+  let change;
+  try { change = JSON.parse(await fs.readFile(journal, 'utf8')); }
+  catch (error) { if (error.code === 'ENOENT') return; throw error; }
+  if (![change.from,change.to].every(name => /^[a-f0-9]{64}\.json$/.test(name)) || change.to !== hash(change.account.email)+'.json') throw Error('Invalid profile change journal.');
+  await atomicWrite(path.join(storage,change.to),change.account);
+  if (change.from !== change.to) await fs.rm(path.join(storage,change.from), { force:true });
+  for (const [key,record] of sessions) if (record.user.id === change.account.id) sessions.delete(key);
+  await fs.rm(journal);
+}
+function queued(operation) {
+  const next = accountQueue.then(async () => { await recoverProfileChange(); return operation(); });
+  accountQueue = next.catch(() => {});
+  return next;
+}
+function issueSession(req,res,account) {
+  sessions.delete(hash(token(req) || ''));
+  const value = crypto.randomBytes(32).toString('hex'), user = publicUser(account);
+  sessions.set(hash(value), { user, expires:Date.now() + lifetime });
+  res.setHeader('Set-Cookie',cookie(req,value,lifetime / 1000));
+  return user;
+}
 function session(req) {
   const key = hash(token(req) || '');
   const record = sessions.get(key);
@@ -28,12 +56,12 @@ function sameOrigin(req) {
 function cookie(req, value, maxAge) {
   return 'zprop_session=' + value + '; HttpOnly; SameSite=Lax; Path=/; Max-Age=' + maxAge + (req.socket.encrypted || production || process.env.AUTH_SECURE_COOKIE === '1' ? '; Secure' : '');
 }
-async function body(req) {
+async function body(req, maxSize = 4096) {
   if (!(req.headers['content-type'] || '').startsWith('application/json')) throw fail('request', 415);
   const chunks = []; let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > 4096) throw fail('request', 413);
+    if (size > maxSize) throw fail('request', 413);
     chunks.push(chunk);
   }
   try { const data = JSON.parse(Buffer.concat(chunks).toString('utf8')); if (!data || typeof data !== 'object' || Array.isArray(data)) throw Error(); return data; }
@@ -41,19 +69,22 @@ async function body(req) {
 }
 async function initialize() {
   await fs.mkdir(storage, { recursive:true });
+  await recoverProfileChange();
   const filename = path.join(storage, hash(adminEmail) + '.json');
   try {
     const existing = JSON.parse(await fs.readFile(filename, 'utf8'));
     if (existing.role !== 'admin') throw new Error('The configured admin email belongs to a regular account. Choose a different ADMIN_EMAIL.');
     return;
   } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  // An administrator can change their login email without recreating the seed account.
+  if ((await readUsers()).some(user => user.role === 'admin')) return;
   const salt = crypto.randomBytes(16).toString('hex');
   const password = process.env.ADMIN_PASSWORD || 'admin1234567';
   if (password.length < 12 || password.length > 128) throw new Error('ADMIN_PASSWORD must contain 12-128 characters.');
   const account = { id:crypto.randomUUID(), email:adminEmail, salt, passwordHash:(await scrypt(password, salt, 64)).toString('hex'), role:'admin', createdAt:new Date().toISOString() };
   await fs.writeFile(filename, JSON.stringify(account), { flag:'wx', mode:0o600 });
 }
-async function listUsers() {
+async function readUsers() {
   const users = [];
   for (const name of await fs.readdir(storage)) {
     if (!/^[a-f0-9]{64}\.json$/.test(name)) continue;
@@ -63,9 +94,10 @@ async function listUsers() {
   }
   return users;
 }
+const listUsers = () => queued(readUsers);
 function setAccess(id, changes) {
-  const operation = accountQueue.then(async () => {
-    const user = (await listUsers()).find(user => user.id === id);
+  return queued(async () => {
+    const user = (await readUsers()).find(user => user.id === id);
     if (!user) throw fail('notFound', 404);
     if (user.role === 'admin') throw fail('adminProtected', 403);
     const filename = path.join(storage, hash(user.email) + '.json');
@@ -81,12 +113,96 @@ function setAccess(id, changes) {
     }
     return { ...user, ...changes };
   });
-  accountQueue = operation.catch(() => {});
-  return operation;
+}
+function validateAvatar(value) {
+  if (value === null) return null;
+  if (typeof value !== 'string' || value.length > 700000 || !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(value)) throw fail('image');
+  const bytes = Buffer.from(value.slice(22),'base64');
+  if (bytes.length < 57 || bytes.length > 512*1024 || !bytes.subarray(0,8).equals(Buffer.from('89504e470d0a1a0a','hex'))) throw fail('image');
+  let offset=8, width, height, channels, ended=false; const compressed=[];
+  while (offset+12 <= bytes.length) {
+    const size=bytes.readUInt32BE(offset), type=bytes.toString('ascii',offset+4,offset+8), end=offset+12+size;
+    if(end>bytes.length)throw fail('image');
+    if(offset===8 && type!=='IHDR')throw fail('image');
+    if(type==='IHDR') {
+      if(offset!==8 || size!==13)throw fail('image');
+      width=bytes.readUInt32BE(offset+8);height=bytes.readUInt32BE(offset+12);
+      channels=bytes[offset+17]===6?4:bytes[offset+17]===2?3:0;
+      if(!width||!height||width>512||height>512||!channels||bytes[offset+16]!==8||bytes[offset+18]||bytes[offset+19]||bytes[offset+20])throw fail('image');
+    } else if(type==='IDAT') compressed.push(bytes.subarray(offset+8,offset+8+size));
+    else if(type==='IEND') { if(size || end!==bytes.length)throw fail('image'); ended=true; }
+    else if(!/^[a-z]/.test(type))throw fail('image');
+    offset=end;
+  }
+  if(!ended||!compressed.length)throw fail('image');
+  try {
+    const stride=width*channels+1, raw=require('node:zlib').inflateSync(Buffer.concat(compressed),{maxOutputLength:stride*height});
+    if(raw.length!==stride*height)throw Error();
+    for(let row=0;row<height;row++)if(raw[row*stride]>4)throw Error();
+  } catch {throw fail('image');}
+  return value;
+}
+async function profileRequest(req,res,pathname) {
+  if (!session(req)) throw fail('signInRequired',401);
+  if (req.method==='GET') return queued(async () => {
+    const actor=session(req)?.user;if(!actor)throw fail('signInRequired',401);
+    const account=JSON.parse(await fs.readFile(path.join(storage,hash(actor.email)+'.json'),'utf8'));
+    if(pathname==='/api/auth/avatar') {
+      if(!account.avatar)throw fail('notFound',404);
+      res.writeHead(200,{'Content-Type':'image/png','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}).end(Buffer.from(account.avatar.slice(22),'base64'));
+    } else json(res,200,{user:publicUser(account)});
+  });
+  if(pathname!=='/api/auth/profile' || req.method!=='PATCH')throw fail('method',405);
+  if(!sameOrigin(req))throw fail('origin',403);
+  const data=await body(req,710000), keys=Object.keys(data);
+  if(!keys.length || keys.some(key=>!['email','newPassword','currentPassword','avatar'].includes(key)))throw fail('request');
+  if(!keys.some(key=>['email','newPassword','avatar'].includes(key)))throw fail('request');
+  await queued(async () => {
+    const actor=session(req)?.user;if(!actor)throw fail('signInRequired',401);
+    const filename=path.join(storage,hash(actor.email)+'.json');
+    const account=JSON.parse(await fs.readFile(filename,'utf8'));
+    const sensitive=Object.hasOwn(data,'email')||Object.hasOwn(data,'newPassword');
+    if(sensitive) {
+      const key='profile:'+actor.id;let limit=attempts.get(key);
+      if(!limit||limit.until<=Date.now()){limit={count:0,until:Date.now()+15*60*1000};attempts.set(key,limit);}
+      if(++limit.count>10)throw fail('rateLimit',429);
+      if(typeof data.currentPassword!=='string'||!data.currentPassword.length||data.currentPassword.length>128)throw fail('currentPassword');
+      const derived=await scrypt(data.currentPassword,account.salt,64);
+      if(!crypto.timingSafeEqual(derived,Buffer.from(account.passwordHash,'hex')))throw fail('currentPassword');
+      limit.count--;
+    }
+    if(Object.hasOwn(data,'email')) {
+      const email=typeof data.email==='string'?data.email.trim().toLowerCase():'';
+      if(email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw fail('email');
+      if(email!==account.email) {
+        if(email===adminEmail && account.role!=='admin')throw fail('exists',409);
+        try {await fs.access(path.join(storage,hash(email)+'.json'));throw fail('exists',409);}
+        catch(error){if(error.code!=='ENOENT')throw error;}
+      }
+      account.email=email;
+    }
+    if(Object.hasOwn(data,'newPassword')) {
+      if(typeof data.newPassword!=='string'||data.newPassword.length<12||data.newPassword.length>128)throw fail('password');
+      account.salt=crypto.randomBytes(16).toString('hex');account.passwordHash=(await scrypt(data.newPassword,account.salt,64)).toString('hex');
+    }
+    if(Object.hasOwn(data,'avatar'))account.avatar=validateAvatar(data.avatar);
+    if(!account.createdAt){account.createdAt=(await fs.stat(filename)).birthtime.toISOString();account.signupDateEstimated=true;}
+    account.updatedAt=new Date().toISOString();
+    if(sensitive) {
+      await atomicWrite(journal,{from:path.basename(filename),to:hash(account.email)+'.json',account});
+      await recoverProfileChange();
+      json(res,200,{user:issueSession(req,res,account)});
+    } else {
+      await atomicWrite(filename,account);
+      for(const record of sessions.values())if(record.user.id===account.id)record.user=publicUser(account);
+      json(res,200,{user:publicUser(account)});
+    }
+  });
 }
 async function handle(req, res, pathname) {
   if (!pathname.startsWith('/api/auth/')) return false;
   try {
+    if (['/api/auth/profile','/api/auth/avatar'].includes(pathname)) { await profileRequest(req,res,pathname); return true; }
     if (pathname === '/api/auth/session' && req.method === 'GET') {
       json(res, 200, { user:session(req)?.user || null }); return true;
     }
@@ -105,6 +221,7 @@ async function handle(req, res, pathname) {
     const email = typeof data?.email === 'string' ? data.email.trim().toLowerCase() : '';
     const password = data?.password;
     if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || typeof password !== 'string' || !password.length || password.length > 128) throw fail('request');
+    await queued(async () => {
     const filename = path.join(storage, hash(email) + '.json');
     let account;
     if (pathname.endsWith('/register')) {
@@ -122,19 +239,12 @@ async function handle(req, res, pathname) {
       if (!account || !crypto.timingSafeEqual(derived, Buffer.from(account.passwordHash, 'hex'))) throw fail('credentials', 401);
     }
     // Serialize session creation with access changes to prevent a sign-in/block race.
-    const complete = accountQueue.then(async () => {
       account = JSON.parse(await fs.readFile(filename, 'utf8'));
       if (account.signInBlocked) throw fail('signInBlocked', 403);
       limit.count--;
-      sessions.delete(hash(token(req) || ''));
-      const value = crypto.randomBytes(32).toString('hex');
-      const user = publicUser(account);
-      sessions.set(hash(value), { user, expires:Date.now() + lifetime });
-      res.setHeader('Set-Cookie', cookie(req, value, lifetime / 1000));
+      const user = issueSession(req,res,account);
       json(res, pathname.endsWith('/register') ? 201 : 200, { user });
     });
-    accountQueue = complete.catch(() => {});
-    await complete;
   } catch (error) { json(res, error.status || 500, { error:error.status ? error.message : 'server' }); }
   return true;
 }

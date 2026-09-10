@@ -5,6 +5,7 @@
   const appBase = new URL('.', document.currentScript.src);
   const isToolUrl = url => url.origin === appBase.origin && url.pathname.startsWith(appBase.pathname + 'tools/');
   const isTool = isToolUrl(new URL(location.href));
+  const isProfile = document.body.dataset.tool === 'profile';
   const toolLinks = [...document.querySelectorAll('a[href]')]
     .map(link => ({ link, target:new URL(link.href) }))
     .filter(({ target }) => isToolUrl(target));
@@ -97,6 +98,7 @@
       if (anchor) { const link = document.createElement("a"); link.href = new URL("admin.html", appBase); link.textContent = "Admin"; link.dataset.adminLink = "true"; anchor.before(link); }
     }
     if (user?.role !== "admin") document.querySelector("[data-admin-link]")?.remove();
+    document.dispatchEvent(new Event('zprop:session'));
     if (!form) return;
     document.querySelector('#sign-in-title').textContent = t(register ? 'registerTitle' : 'title');
     document.querySelector('.sign-in-subtitle').textContent = t('subtitle');
@@ -144,7 +146,7 @@
         const response = await authFetch(new URL('api/auth/' + (register ? 'register' : 'sign-in'), appBase), { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ email:form.email.value, password:form.password.value }) });
         const data = await response.json();
         if (!response.ok) { statusKey = data.error; return; }
-        form.reset(); location.assign(data.user?.role === "admin" ? new URL("admin.html", appBase).href : destination());
+        form.reset(); location.assign(data.user?.role === "admin" ? new URL("admin.html?lang=" + language(), appBase).href : destination());
       } catch { statusKey = 'server'; }
       finally { busy = false; render(); if (statusKey) document.querySelector('#auth-status').focus(); }
     });
@@ -174,7 +176,7 @@
       if (!response.ok) throw new Error();
       user = (await response.json()).user;
       if (isTool && !user) { redirect(); return false; }
-      if (isTool && user?.toolsBlocked) { location.replace(new URL("access-denied.html", appBase)); return false; }
+      if (isTool && !isProfile && user?.toolsBlocked) { location.replace(new URL("access-denied.html", appBase)); return false; }
       render(); return !!user;
     } catch {
       user = null;
@@ -184,7 +186,8 @@
     }
   }
   render();
-  window.ZpropAuth = { ready:user ? Promise.resolve(true) : check(), fetch:authFetch };
+  window.ZpropAuth = { ready:user ? Promise.resolve(true) : check(), fetch:authFetch, getUser:() => user, refresh:check };
+  window.addEventListener('storage',event=>{if(event.key==='zprop-profile-updated')check();});
   toolLinks.forEach(({ link }) => link.addEventListener('click', async event => {
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault();

@@ -91,7 +91,7 @@ test('admin dashboard charts, search, access controls, export and mobile layout'
     await page.locator('#email').fill(adminCredentials.email);
     await page.locator('#password').fill(adminCredentials.password);
     await page.locator('#sign-in-submit').click();
-    await expect(page).toHaveURL(/\/admin.html$/);
+    await expect(page).toHaveURL(/\/admin\.html\?lang=en$/);
     await expect(page.locator('#total-users')).not.toHaveText('\u2014');
     await expect(page.locator('#usage-chart svg')).toBeVisible();
     await expect(page.locator('#signup-chart svg')).toBeVisible();
@@ -162,4 +162,101 @@ test('archived test activity does not inflate user totals or usage charts',async
   expect(after.tools).toEqual(before.tools);
   expect(after.series).toEqual(before.series);
   expect(after.users).toEqual(before.users);
+});
+
+test('admin language and dark mode persist, with translated data and access dialogs',async({page,request},info)=>{
+  await register(request);
+  await login(page.request);
+  await page.goto('/admin.html?lang=en');
+  await expect(page.locator('#total-users')).not.toHaveText('\u2014');
+  const total=await page.locator('#total-users').textContent();
+  await page.locator('.theme-toggle').click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
+  await page.getByRole('button',{name:'BM',exact:true}).click();
+  await expect(page.locator('html')).toHaveAttribute('lang','ms');
+  await expect(page.locator('h1')).toContainText('Ringkasan admin');
+  await expect(page.locator('[data-admin-copy="Total users"]')).toHaveText('Jumlah pengguna');
+  await expect(page.locator('#total-users')).toHaveText(total);
+  await expect(page.locator('#account-note')).toContainText('pentadbir');
+  await expect(page.locator('#new-users')).toContainText('mendaftar');
+  await expect(page.locator('#usage-chart summary')).toHaveText('Lihat angka harian');
+  await expect(page.locator('#tool option[value="bio-pages"]')).toHaveText('Halaman bio');
+  await expect(page.locator('.theme-toggle')).toHaveAttribute('aria-label','Mod gelap');
+  await page.locator('#period').selectOption('7');
+  await expect(page.locator('.period-label').first()).toHaveText('(7 hari)');
+  await page.locator('#user-rows button').first().click();
+  await expect(page.locator('#dialog-title')).toContainText(/akses alatan/);
+  await expect(page.locator('#confirm-access')).toHaveText('Sahkan perubahan');
+  await page.getByRole('button',{name:'Batal',exact:true}).click();
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
+  await expect(page.locator('html')).toHaveAttribute('lang','ms');
+  await expect(page.locator('#total-users')).toHaveText(total);
+  expect(await page.locator('.panel').first().evaluate(element=>getComputedStyle(element).backgroundColor)).toBe('rgb(25, 27, 32)');
+  await page.locator('#search').fill('no-matching-account');
+  await expect(page.locator('#user-rows')).toContainText('Tiada pengguna');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:'test-results/admin-dark-bm-'+info.project.name+'.png',fullPage:true});
+  await page.getByRole('button',{name:'BI',exact:true}).click();
+  await expect(page.locator('h1')).toContainText('Admin overview');
+  await expect(page.locator('#user-rows')).toContainText('No users match');
+  await expect(page.locator('#search')).toHaveValue('no-matching-account');
+  await page.locator('.theme-toggle').click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme','light');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('lang','en');
+  await expect(page.locator('html')).toHaveAttribute('data-theme','light');
+});
+
+test('user totals match stored accounts across filters, restrictions, archives and restarts',async({request,baseURL,adminServer})=>{
+  await login(request);
+  const before=await (await request.get('/api/admin/overview')).json();
+  const member=await requests.newContext({baseURL});
+  try {
+    const user=await register(member);
+    const after=await (await request.get('/api/admin/overview')).json();
+    expect(after.metrics.totalUsers).toBe(before.metrics.totalUsers+1);
+    expect(after.metrics.administrators).toBe(1);
+    expect(after.metrics.totalUsers).toBe(after.users.length);
+    expect(Number.isFinite(Date.parse(after.generatedAt))).toBe(true);
+    await request.patch('/api/admin/users/'+user.id+'/access',{data:{toolsBlocked:true,signInBlocked:true}});
+    for(const days of [7,30,90]) {
+      const report=await (await request.get('/api/admin/overview?days='+days+'&tool=vcards')).json();
+      expect(report.metrics.totalUsers).toBe(after.metrics.totalUsers);
+      expect(report.users.find(account=>account.id===user.id)).toMatchObject({toolsBlocked:true,signInBlocked:true});
+      expect(report.metrics.activeUsers).toBe(report.users.filter(account=>account.uses>0).length);
+    }
+    const accounts=path.join(adminServer.directory,'accounts');
+    const filename=crypto.createHash('sha256').update(user.email).digest('hex')+'.json';
+    const archive=path.join(accounts,'.test-archive');await fs.mkdir(archive,{recursive:true});
+    await fs.rename(path.join(accounts,filename),path.join(archive,filename));
+    await adminServer.restart();await login(request);
+    const final=await (await request.get('/api/admin/overview')).json();
+    expect(final.metrics.totalUsers).toBe(before.metrics.totalUsers);
+    expect(final.users.some(account=>account.id===user.id)).toBe(false);
+    const stored=[];
+    for(const name of await fs.readdir(accounts))if(/^[a-f0-9]{64}\.json$/.test(name))stored.push(JSON.parse(await fs.readFile(path.join(accounts,name),'utf8')));
+    expect(final.metrics.totalUsers).toBe(stored.filter(account=>account.role!=='admin').length);
+  } finally {await member.dispose();}
+});
+
+test('admin profile survives restart without reseeding and recovers a pending email change',async({request,adminServer})=>{
+  await login(request);
+  const email='changed-admin-'+crypto.randomUUID()+'@example.com',newPassword='Changed-admin-123!';
+  const changed=await request.patch('/api/auth/profile',{data:{email,newPassword,currentPassword:adminCredentials.password}});
+  expect(changed.status()).toBe(200);const id=(await changed.json()).user.id;
+  await adminServer.restart();
+  expect((await request.post('/api/auth/sign-in',{data:adminCredentials})).status()).toBe(401);
+  expect((await request.post('/api/auth/sign-in',{data:{email,password:newPassword}})).status()).toBe(200);
+  const summary=await (await request.get('/api/admin/overview')).json();expect(summary.metrics.administrators).toBe(1);
+  const directory=path.join(adminServer.directory,'accounts');
+  const from=crypto.createHash('sha256').update(email).digest('hex')+'.json';
+  const to=crypto.createHash('sha256').update(adminCredentials.email).digest('hex')+'.json';
+  const account=JSON.parse(await fs.readFile(path.join(directory,from),'utf8'));account.email=adminCredentials.email;
+  await fs.writeFile(path.join(directory,'.profile-change.json'),JSON.stringify({from,to,account}));
+  await adminServer.restart();
+  const recovered=await request.post('/api/auth/sign-in',{data:{email:adminCredentials.email,password:newPassword}});expect(recovered.status()).toBe(200);
+  expect((await recovered.json()).user).toMatchObject({id,role:'admin'});
+  expect((await fs.readdir(directory)).includes(from)).toBe(false);
+  expect((await request.patch('/api/auth/profile',{data:{currentPassword:newPassword,newPassword:adminCredentials.password}})).status()).toBe(200);
 });

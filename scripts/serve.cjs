@@ -50,7 +50,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
   const actor = auth.session(req)?.user;
-  if (actor?.toolsBlocked && (protectedPage || /^\/api\/(bio-pages|qr-codes|short-links|file-links|static-sites|vcards|dashboard-links)(\/|$)/.test(pathname))) {
+  if (actor?.toolsBlocked && !/^\/tools\/profile\.html$/i.test(pathname) && (protectedPage || /^\/api\/(bio-pages|qr-codes|short-links|file-links|static-sites|vcards|dashboard-links)(\/|$)/.test(pathname))) {
     if (pathname.startsWith('/api/')) res.writeHead(403,{'Content-Type':'application/json'}).end(JSON.stringify({error:'toolsBlocked'}));
     else res.writeHead(302,{Location:'/access-denied.html'}).end();
     return;

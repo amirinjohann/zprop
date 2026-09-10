@@ -8,6 +8,9 @@ const storage = path.join(root, '.accounts');
 const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const patterns = [
   new RegExp('^(?:test|auth|service-check|admin-test)-' + uuid + '@example\\.com$'),
+  new RegExp('^' + uuid + '@example\\.com$'), // QR ownership tests.
+  /^test-(?:design|polish)-\d{13}@example\.com$/, // Historical UI previews.
+  /^icons-[0-9a-f]{12}@example\.com$/,
   /^(?:link|library|nav|stats|links|short)-[0-9a-f]{12}@example\.com$/,
   /^nav-\d{13}@example\.com$/,
   /^managed-[0-9a-f]{10}@example\.com$/,
