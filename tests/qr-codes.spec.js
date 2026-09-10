@@ -25,10 +25,10 @@ const cases = [
   { type:'Event', values:{ eventTitle:'Open house, ZPROP', start:'2026-10-10T09:00', end:'2026-10-10T11:00', eventLocation:'Melaka; Malaysia', description:'Lawatan pertama\nBawa keluarga 👋' } },
   { type:'Vcard', values:{ firstName:'Aina 爱娜', lastName:'ZPROP', company:'ZPROP; Team', contactPhone:'+60123456789', email:'aina@example.com', website:'https://example.com', address:'Level 1, Melaka\nMalaysia' } }
 ];
-for (const item of cases) test(`${item.type} exports scannable PNG and SVG with the entered content`, async ({ page }) => {
+for (const item of cases) test(`${item.type} exports scannable PNG and SVG with the entered content`, async ({ page, baseURL }) => {
   const errors = [], external = [];
   page.on('pageerror', error => errors.push(error.message));
-  page.on('request', request => { if (/^https?:/.test(request.url()) && !request.url().startsWith('http://127.0.0.1:4173/')) external.push(request.url()); });
+  page.on('request', request => { if (/^https?:/.test(request.url()) && !request.url().startsWith(baseURL + '/')) external.push(request.url()); });
   await page.goto('/tools/qr-codes.html?lang=en');
   await page.locator('#new-qr').click();
   await page.addScriptTag({ path:path.resolve('node_modules/jsqr/dist/jsQR.js') });

@@ -1,9 +1,9 @@
 const {test,expect}=require('@playwright/test');
 
-test('portal preserves language, links to sign-in and loads only local assets',async({page},testInfo)=>{
+test('portal preserves language, links to sign-in and loads only local assets',async({page,baseURL},testInfo)=>{
   const errors=[]; const external=[];
   page.on('pageerror',error=>errors.push(error.message));
-  page.on('request',request=>{if(!request.url().startsWith('http://127.0.0.1:4173/'))external.push(request.url());});
+  page.on('request',request=>{if(!request.url().startsWith(baseURL + '/'))external.push(request.url());});
   await page.goto('/landing.html?lang=en');
   await expect(page.locator('html')).toHaveAttribute('lang','en');
   await expect(page.locator('#portal-title')).toContainText('One place.');

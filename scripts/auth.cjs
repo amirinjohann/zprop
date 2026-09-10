@@ -5,14 +5,17 @@ const { promisify } = require('node:util');
 const { publicOrigin } = require('../public-origin.js');
 const production = process.env.NODE_ENV === 'production';
 const scrypt = promisify(crypto.scrypt);
-const storage = path.resolve(__dirname, '../.accounts');
+const storage = path.resolve(process.env.ZPROP_ACCOUNTS_DIR || path.join(__dirname, '../.accounts'));
+const adminEmail = (process.env.ADMIN_EMAIL || 'zpropadmin@gmail.com').trim().toLowerCase();
 const sessions = new Map();
 const attempts = new Map();
+let accountQueue = Promise.resolve();
 const lifetime = 7 * 24 * 60 * 60 * 1000;
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const fail = (error, status = 400) => Object.assign(new Error(error), { status });
 const json = (res, status, body) => res.writeHead(status, { 'Content-Type':'application/json', 'Cache-Control':'no-store' }).end(JSON.stringify(body));
 const token = req => (req.headers.cookie || '').split(';').map(part => part.trim()).find(part => part.startsWith('zprop_session='))?.slice(14);
+const publicUser = account => ({ id:account.id, email:account.email, role:account.role === 'admin' ? 'admin' : 'user', toolsBlocked:!!account.toolsBlocked });
 function session(req) {
   const key = hash(token(req) || '');
   const record = sessions.get(key);
@@ -20,10 +23,10 @@ function session(req) {
   return record;
 }
 function sameOrigin(req) {
-  return !req.headers.origin || req.headers.origin === (process.env.AUTH_ORIGIN || (production ? publicOrigin : `${req.socket.encrypted ? 'https' : 'http'}://${req.headers.host}`));
+  return (!req.headers.origin || req.headers.origin === (process.env.AUTH_ORIGIN || (production ? publicOrigin : (req.socket.encrypted ? 'https' : 'http') + '://' + req.headers.host))) && req.headers['sec-fetch-site'] !== 'cross-site';
 }
 function cookie(req, value, maxAge) {
-  return `zprop_session=${value}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${req.socket.encrypted || production || process.env.AUTH_SECURE_COOKIE === '1' ? '; Secure' : ''}`;
+  return 'zprop_session=' + value + '; HttpOnly; SameSite=Lax; Path=/; Max-Age=' + maxAge + (req.socket.encrypted || production || process.env.AUTH_SECURE_COOKIE === '1' ? '; Secure' : '');
 }
 async function body(req) {
   if (!(req.headers['content-type'] || '').startsWith('application/json')) throw fail('request', 415);
@@ -33,7 +36,53 @@ async function body(req) {
     if (size > 4096) throw fail('request', 413);
     chunks.push(chunk);
   }
-  try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw fail('request'); }
+  try { const data = JSON.parse(Buffer.concat(chunks).toString('utf8')); if (!data || typeof data !== 'object' || Array.isArray(data)) throw Error(); return data; }
+  catch { throw fail('request'); }
+}
+async function initialize() {
+  await fs.mkdir(storage, { recursive:true });
+  const filename = path.join(storage, hash(adminEmail) + '.json');
+  try {
+    const existing = JSON.parse(await fs.readFile(filename, 'utf8'));
+    if (existing.role !== 'admin') throw new Error('The configured admin email belongs to a regular account. Choose a different ADMIN_EMAIL.');
+    return;
+  } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  const salt = crypto.randomBytes(16).toString('hex');
+  const password = process.env.ADMIN_PASSWORD || 'admin1234567';
+  if (password.length < 12 || password.length > 128) throw new Error('ADMIN_PASSWORD must contain 12-128 characters.');
+  const account = { id:crypto.randomUUID(), email:adminEmail, salt, passwordHash:(await scrypt(password, salt, 64)).toString('hex'), role:'admin', createdAt:new Date().toISOString() };
+  await fs.writeFile(filename, JSON.stringify(account), { flag:'wx', mode:0o600 });
+}
+async function listUsers() {
+  const users = [];
+  for (const name of await fs.readdir(storage)) {
+    if (!/^[a-f0-9]{64}\.json$/.test(name)) continue;
+    const filename = path.join(storage, name);
+    const account = JSON.parse(await fs.readFile(filename, 'utf8'));
+    users.push({ ...publicUser(account), signInBlocked:!!account.signInBlocked, createdAt:account.createdAt || (await fs.stat(filename)).birthtime.toISOString(), signupDateEstimated:!!account.signupDateEstimated || !account.createdAt });
+  }
+  return users;
+}
+function setAccess(id, changes) {
+  const operation = accountQueue.then(async () => {
+    const user = (await listUsers()).find(user => user.id === id);
+    if (!user) throw fail('notFound', 404);
+    if (user.role === 'admin') throw fail('adminProtected', 403);
+    const filename = path.join(storage, hash(user.email) + '.json');
+    const account = JSON.parse(await fs.readFile(filename, 'utf8'));
+    if (!account.createdAt) { account.createdAt=user.createdAt; account.signupDateEstimated=true; }
+    Object.assign(account, changes);
+    const temporary = filename + '.' + crypto.randomUUID() + '.tmp';
+    try { await fs.writeFile(temporary, JSON.stringify(account), { flag:'wx', mode:0o600 }); await fs.rename(temporary, filename); }
+    finally { await fs.rm(temporary, { force:true }); }
+    for (const [key, record] of sessions) if (record.user.id === id) {
+      if (account.signInBlocked) sessions.delete(key);
+      else record.user = publicUser(account);
+    }
+    return { ...user, ...changes };
+  });
+  accountQueue = operation.catch(() => {});
+  return operation;
 }
 async function handle(req, res, pathname) {
   if (!pathname.startsWith('/api/auth/')) return false;
@@ -42,7 +91,7 @@ async function handle(req, res, pathname) {
       json(res, 200, { user:session(req)?.user || null }); return true;
     }
     if (req.method !== 'POST') throw fail('method', 405);
-    if (!sameOrigin(req) || req.headers['sec-fetch-site'] === 'cross-site') throw fail('origin', 403);
+    if (!sameOrigin(req)) throw fail('origin', 403);
     if (pathname === '/api/auth/sign-out') {
       sessions.delete(hash(token(req) || ''));
       res.setHeader('Set-Cookie', cookie(req, '', 0)); json(res, 200, { ok:true }); return true;
@@ -59,9 +108,10 @@ async function handle(req, res, pathname) {
     const filename = path.join(storage, hash(email) + '.json');
     let account;
     if (pathname.endsWith('/register')) {
+      if (email === adminEmail) throw fail('exists', 409);
       if (password.length < 12) throw fail('password');
       const salt = crypto.randomBytes(16).toString('hex');
-      account = { id:crypto.randomUUID(), email, salt, passwordHash:(await scrypt(password, salt, 64)).toString('hex') };
+      account = { id:crypto.randomUUID(), email, salt, passwordHash:(await scrypt(password, salt, 64)).toString('hex'), role:'user', createdAt:new Date().toISOString() };
       await fs.mkdir(storage, { recursive:true });
       try { await fs.writeFile(filename, JSON.stringify(account), { flag:'wx', mode:0o600 }); }
       catch (error) { if (error.code === 'EEXIST') throw fail('exists', 409); throw error; }
@@ -71,14 +121,20 @@ async function handle(req, res, pathname) {
       const derived = await scrypt(password, account?.salt || 'zprop-unknown-account', 64);
       if (!account || !crypto.timingSafeEqual(derived, Buffer.from(account.passwordHash, 'hex'))) throw fail('credentials', 401);
     }
-    // Successful authentication rotates any existing session; only token hashes are retained.
-    limit.count--;
-    sessions.delete(hash(token(req) || ''));
-    const value = crypto.randomBytes(32).toString('hex');
-    const user = { id:account.id, email:account.email };
-    sessions.set(hash(value), { user, expires:Date.now() + lifetime });
-    res.setHeader('Set-Cookie', cookie(req, value, lifetime / 1000));
-    json(res, pathname.endsWith('/register') ? 201 : 200, { user });
+    // Serialize session creation with access changes to prevent a sign-in/block race.
+    const complete = accountQueue.then(async () => {
+      account = JSON.parse(await fs.readFile(filename, 'utf8'));
+      if (account.signInBlocked) throw fail('signInBlocked', 403);
+      limit.count--;
+      sessions.delete(hash(token(req) || ''));
+      const value = crypto.randomBytes(32).toString('hex');
+      const user = publicUser(account);
+      sessions.set(hash(value), { user, expires:Date.now() + lifetime });
+      res.setHeader('Set-Cookie', cookie(req, value, lifetime / 1000));
+      json(res, pathname.endsWith('/register') ? 201 : 200, { user });
+    });
+    accountQueue = complete.catch(() => {});
+    await complete;
   } catch (error) { json(res, error.status || 500, { error:error.status ? error.message : 'server' }); }
   return true;
 }
@@ -86,4 +142,4 @@ setInterval(() => {
   for (const [key, value] of sessions) if (value.expires <= Date.now()) sessions.delete(key);
   for (const [key, value] of attempts) if (value.until <= Date.now()) attempts.delete(key);
 }, 60000).unref();
-module.exports = { handle, session, sameOrigin };
+module.exports = { handle, session, sameOrigin, initialize, listUsers, setAccess, body };

@@ -11,3 +11,6 @@ test-results/
 playwright-report/
 reference.html
 listings-reference.html
+
+.admin/
+.test-data/

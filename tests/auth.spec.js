@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./server-fixture');
 const crypto = require('node:crypto');
 const email = () => `auth-${crypto.randomUUID()}@example.com`;
 const password = 'Correct-horse-123!';

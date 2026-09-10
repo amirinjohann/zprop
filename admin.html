@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin overview &mdash; ZPROP</title>
+<link rel="stylesheet" href="admin.css">
+<script src="admin.js" defer></script>
+</head>
+<body>
+<aside class="sidebar">
+<a class="brand" href="admin.html"><img src="assets/zprop-tech-logo-clean.png" alt=""> ZPROP<span class="admin-tag">ADMIN</span></a>
+<p class="nav-label">WORKSPACE</p>
+<nav aria-label="Admin navigation"><a href="#overview" class="active"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><a href="#users"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M2 21v-2a7 7 0 0 1 14 0v2M17 4a4 4 0 0 1 0 8M22 21v-2a7 7 0 0 0-3-6"/></svg><span>User management</span></a><a href="#activity"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v6h6M3 9a9 9 0 1 1 1 10M12 7v5l3 2"/></svg><span>Access history</span></a></nav>
+<div class="sidebar-bottom"><p>Administration<br><small>Manage your ZPROP workspace.</small></p><a href="landing.html?lang=en">&larr; Back to website</a><button id="sign-out" class="quiet">Sign out</button></div>
+</aside>
+<main>
+<header><div><span class="eyebrow">WORKSPACE / OVERVIEW</span><h1>Admin overview<span class="heading-dot">.</span></h1><p class="muted">A clear view of your users and the tools they use.</p></div><div class="admin-identity"><span class="avatar">ZA</span><div><strong>Administrator</strong><small id="admin-email"></small></div></div></header>
+<div id="status" role="status" aria-live="polite"></div>
+<section id="overview" aria-label="Overview">
+<div class="section-heading"><div><span class="live-dot"></span><strong>Workspace activity</strong><span id="updated" class="muted small"></span></div><div class="filters"><label>Period <select id="period"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option></select></label><button id="refresh" class="secondary">Refresh</button><button id="export" class="secondary">Export users</button></div></div>
+<div class="metrics">
+<article class="metric"><span>Total users</span><strong id="total-users">&mdash;</strong><small id="new-users">Loading signups&hellip;</small></article>
+<article class="metric accent"><span>Tool uses <small class="period-label"></small></span><strong id="total-uses">&mdash;</strong><small id="all-time">Successful creates and saves</small></article>
+<article class="metric"><span>Active users <small class="period-label"></small></span><strong id="active-users">&mdash;</strong><small>Users with a recorded tool action</small></article>
+<article class="metric"><span>Restricted accounts</span><strong id="blocked-users">&mdash;</strong><small id="blocked-detail">Tool or sign-in restrictions</small></article>
+</div>
+<div class="charts">
+<article class="panel usage-panel"><div class="panel-heading"><div><h2>Tool usage over time</h2><p>Successful creates and saves per day</p></div><label class="tool-filter"><span class="sr-only">Filter tool</span><select id="tool"><option value="all">All tools</option></select></label></div><div id="usage-chart" class="chart"></div></article>
+<article class="panel"><div class="panel-heading"><div><h2>New signups</h2><p>New user accounts per day</p></div><span class="chart-key">&#9679; Users</span></div><div id="signup-chart" class="chart"></div></article>
+</div>
+<p id="tracking-note" class="tracking-note"></p>
+<div class="breakdown">
+<article class="panel"><div class="panel-heading"><div><h2>Usage by tool</h2><p>All six tools &middot; selected period</p></div></div><div id="tool-breakdown"></div></article>
+<article class="panel"><div class="panel-heading"><div><h2>Most active users</h2><p>Ranked by uses &middot; selected period and tool</p></div></div><ol id="leaderboard" class="leaderboard"></ol></article>
+</div>
+</section>
+<section id="users" class="panel users-panel"><div class="panel-heading"><div><h2>User management</h2><p>Manage tool access and sign-in independently. Sign-in blocks end existing sessions.</p></div></div>
+<div class="user-toolbar"><label class="search"><span class="sr-only">Search users by email</span><input id="search" type="search" placeholder="Search users by email&hellip;"></label><label><span class="sr-only">Filter access status</span><select id="access-filter"><option value="all">All accounts</option><option value="active">Unrestricted</option><option value="tools">Tools blocked</option><option value="signin">Sign-in blocked</option></select></label><label><span class="sr-only">Sort users</span><select id="sort"><option value="usage">Most tool uses</option><option value="newest">Newest signups</option><option value="email">Email A&ndash;Z</option></select></label></div>
+<div class="table-scroll"><table><thead><tr><th>User</th><th>Joined</th><th>Uses in period</th><th>Last tool use</th><th>Tools</th><th>Sign-in</th><th>Manage access</th></tr></thead><tbody id="user-rows"></tbody></table></div>
+<div class="pagination"><span id="page-info"></span><div><button id="previous" class="secondary">Previous</button><button id="next" class="secondary">Next</button></div></div>
+</section>
+<section id="activity" class="panel"><div class="panel-heading"><div><h2>Access history</h2><p>Latest 50 account access changes</p></div></div><div id="audit-list"></div></section>
+<footer>Private admin workspace <span>Reporting timezone: Asia/Kuala_Lumpur (UTC+8)</span></footer>
+</main>
+<dialog id="access-dialog"><form method="dialog"><h2 id="dialog-title">Change account access</h2><p id="dialog-description"></p><div class="dialog-actions"><button value="cancel" class="secondary">Cancel</button><button value="confirm" class="primary" id="confirm-access">Confirm change</button></div></form></dialog>
+</body></html>

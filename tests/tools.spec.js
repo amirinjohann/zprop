@@ -4,11 +4,11 @@ const {createBio,expandBlocks}=require('./bio-helper');
 const ids=['bio-pages','short-links','transfer-files','vcards','host-html','qr-codes'];
 async function downloaded(page,button){const promise=page.waitForEvent('download');await button.click();const d=await promise;return {name:d.suggestedFilename(),text:await fs.readFile(await d.path(),'utf8')};}
 
-test('all six tools navigate to dedicated local bilingual pages',async({page,request},info)=>{
+test('all six tools navigate to dedicated local bilingual pages',async({page,request,baseURL},info)=>{
   const errors=[],bad=[],external=[];
   page.on('pageerror',e=>errors.push(e.message));
   page.on('response',r=>{if(r.status()>=400)bad.push(r.url());});
-  page.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:4173/'))external.push(r.url());});
+  page.on('request',r=>{if(!r.url().startsWith(baseURL + '/'))external.push(r.url());});
   for(const id of ids){
     await page.goto('/landing.html?lang=en');
     await expect(page.locator('.portal-features a')).toHaveCount(6);

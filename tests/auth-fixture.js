@@ -1,4 +1,4 @@
-const base = require('@playwright/test');
+const base = require('./server-fixture');
 const crypto = require('node:crypto');
 const test = base.test.extend({
   authenticated: [async ({ context, request, baseURL }, use) => {

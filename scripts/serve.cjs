@@ -6,6 +6,7 @@ const sites = require('./static-sites.cjs');
 const links = require('./short-links.cjs');
 const fileLinks = require('./file-links.cjs');
 const auth = require('./auth.cjs');
+const admin = require('./admin.cjs');
 const bioPages = require('./bio-pages.cjs');
 const qrCodes = require('./qr-codes.cjs');
 const dashboardStats = require('./dashboard-stats.cjs');
@@ -15,13 +16,26 @@ const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || '127.0.0.1';
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.png': 'image/png', '.json': 'application/json', '.woff2': 'font/woff2' };
 Object.assign(types, { '.jpeg':'image/jpeg', '.gif':'image/gif', '.webp':'image/webp', '.avif':'image/avif', '.ico':'image/x-icon', '.woff':'font/woff', '.ttf':'font/ttf', '.otf':'font/otf', '.eot':'application/vnd.ms-fontobject', '.xml':'application/xml', '.mp3':'audio/mpeg', '.wav':'audio/wav', '.mp4':'video/mp4', '.webm':'video/webm', '.pdf':'application/pdf', '.txt':'text/plain; charset=utf-8' });
+function requireToolAccess(req) {
+  const user = auth.session(req)?.user;
+  if (!user || user.toolsBlocked) throw Object.assign(new Error(user ? "toolsBlocked" : "signInRequired"), {status:user ? 403 : 401});
+}
 let creationQueue = Promise.resolve(), pendingCreates = 0;
-http.createServer(async (req, res) => {
+const server = http.createServer(async (req, res) => {
   let pathname;
   try { pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); } catch { res.writeHead(400).end(); return; }
   // Reject ambiguous Windows paths before routing or resolving a file.
   if (pathname.includes('\\') || pathname.includes('\0') || pathname.split('/').some(part => part === '..' || /[. ]$/.test(part))) { res.writeHead(400).end(); return; }
   if (await auth.handle(req, res, pathname)) return;
+  if (await admin.handle(req, res, pathname)) return;
+  if (/^\/admin(?:\.html|\/)?$/i.test(pathname) || /^\/admin\.js$/i.test(pathname)) {
+    res.setHeader('Cache-Control','no-store');
+    res.setHeader('Vary','Cookie');
+    const user = auth.session(req)?.user;
+    if (!user) { res.writeHead(302,{Location:'/sign-in.html?lang=en&next=/admin.html'}).end(); return; }
+    if (user.role !== 'admin') { res.writeHead(403,{'Content-Type':'text/plain; charset=utf-8'}).end('Administrator access required.'); return; }
+    if (/^\/admin\/?$/i.test(pathname)) { res.writeHead(302,{Location:'/admin.html'}).end(); return; }
+  }
   const protectedPage = /^\/tools(?:\/|$)/i.test(pathname) || /^\/(tool-pages|static-site|bio-page|bio-library|qr-page|short-links-page)\.js$/i.test(pathname);
   if (protectedPage || pathname.startsWith('/api/')) {
     res.setHeader('Cache-Control', 'no-store');
@@ -35,7 +49,14 @@ http.createServer(async (req, res) => {
       return;
     }
   }
-  const actingOwner = auth.session(req)?.user.id;
+  const actor = auth.session(req)?.user;
+  if (actor?.toolsBlocked && (protectedPage || /^\/api\/(bio-pages|qr-codes|short-links|file-links|static-sites|vcards|dashboard-links)(\/|$)/.test(pathname))) {
+    if (pathname.startsWith('/api/')) res.writeHead(403,{'Content-Type':'application/json'}).end(JSON.stringify({error:'toolsBlocked'}));
+    else res.writeHead(302,{Location:'/access-denied.html'}).end();
+    return;
+  }
+  admin.track(req, res, pathname, actor);
+  const actingOwner = actor?.id;
   if (actingOwner && ['POST','PUT','DELETE'].includes(req.method) && /^\/api\/(bio-pages|qr-codes|short-links|file-links|static-sites|vcards|dashboard-links)(\/|$)/.test(pathname)) {
     res.once('finish', () => { if(res.statusCode>=200 && res.statusCode<300) dashboardEvents.changed(actingOwner); });
   }
@@ -53,7 +74,8 @@ http.createServer(async (req, res) => {
     const previous=creationQueue;let release;
     creationQueue=new Promise(resolve=>{release=resolve;});pendingCreates++;
     await previous;
-    try {json(200,await dashboardStats.remove(req,dashboardDelete[1],dashboardDelete[2],actingOwner));}
+    try {
+      requireToolAccess(req);json(200,await dashboardStats.remove(req,dashboardDelete[1],dashboardDelete[2],actingOwner));}
     catch(error) {json(error.status||500,{error:error.status?error.message:'server'});}
     finally {pendingCreates--;release();}
     return;
@@ -70,6 +92,7 @@ http.createServer(async (req, res) => {
     creationQueue=new Promise(resolve=>{release=resolve;});pendingCreates++;
     await previous;
     try {
+      requireToolAccess(req);
       const ownerId = auth.session(req).user.id;
       json(200, await (tracking ? require('./vcards.cjs').handle(req,vcardRoute[1],ownerId) : dashboardStats.summary(ownerId, pathname==='/api/dashboard-links')));
     } catch (error) { json(error.status || 500, { error:error.status ? error.message : 'server' }); }
@@ -85,7 +108,8 @@ http.createServer(async (req, res) => {
     const previous=creationQueue; let release;
     creationQueue=new Promise(resolve=>{release=resolve;});pendingCreates++;
     await previous;
-    try{json(req.method==='POST'?201:200,await (qrRoute?qrCodes:bioPages).handle(req,(qrRoute||bioRoute)[1],auth.session(req).user.id));}
+    try {
+      requireToolAccess(req);json(req.method==='POST'?201:200,await (qrRoute?qrCodes:bioPages).handle(req,(qrRoute||bioRoute)[1],auth.session(req).user.id));}
     catch(error){json(error.status||(qrRoute&&error.key?400:500),{error:error.status?error.message:qrRoute&&error.key?error.key:'server',...(qrRoute&&error.field?{field:error.field}:{})});}
     finally{pendingCreates--;release();}
     return;
@@ -98,7 +122,8 @@ http.createServer(async (req, res) => {
     const previous=creationQueue;let release;
     creationQueue=new Promise(resolve=>{release=resolve;});pendingCreates++;
     await previous;
-    try { json(req.method==='POST'?201:200, await links.handle(req,shortRoute[1],actingOwner)); }
+    try {
+      requireToolAccess(req); json(req.method==='POST'?201:200, await links.handle(req,shortRoute[1],actingOwner)); }
     catch (error) { json(error.status || 500, { error:error.status ? error.message : 'linkServer' }); }
     finally {pendingCreates--;release();}
     return;
@@ -113,7 +138,8 @@ http.createServer(async (req, res) => {
     creationQueue = new Promise(resolve => { release = resolve; });
     pendingCreates++;
     await previous;
-    try { json(201, await (pathname === '/api/file-links' ? fileLinks : sites).create(req, new URL(req.url, 'http://localhost'), auth.session(req).user.id)); }
+    try {
+      requireToolAccess(req); json(201, await (pathname === '/api/file-links' ? fileLinks : sites).create(req, new URL(req.url, 'http://localhost'), auth.session(req).user.id)); }
     catch (error) { json(error.status || 500, { error:error.status ? error.message : 'server' }); }
     finally { pendingCreates--; release(); }
     return;
@@ -164,4 +190,8 @@ http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff' });
     res.end(data);
   });
-}).listen(port, host, () => console.log(`ZPROP listening on ${host}:${port}. Public domain: ${publicOrigin}`));
+});
+auth.initialize().then(() => {
+  admin.initialize();
+  server.listen(port, host, () => console.log(`ZPROP listening on ${host}:${port}. Public domain: ${publicOrigin}`));
+}).catch(error => { console.error('Unable to initialize ZPROP:', error.message); process.exitCode = 1; });

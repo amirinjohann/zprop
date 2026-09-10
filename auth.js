@@ -22,11 +22,13 @@
     ms:{ title:'Log masuk ke ZPROP.', registerTitle:'Cipta akaun anda.', subtitle:'Log masuk untuk menggunakan kesemua enam alatan ZPROP.', notice:'Satu akaun untuk semua alatan anda. Log masuk atau cipta akaun untuk bermula.', register:'Cipta akaun', signIn:'Log masuk', signOut:'Log keluar', switchRegister:'Pengguna baharu? Cipta akaun', switchSignIn:'Sudah mempunyai akaun? Log masuk', passwordHint:'Gunakan 12–128 aksara untuk akaun baharu.', placeholder:'Masukkan kata laluan anda', credentials:'E-mel atau kata laluan tidak betul.', exists:'Akaun dengan e-mel ini sudah wujud. Sila log masuk.', password:'Gunakan sekurang-kurangnya 12 aksara untuk kata laluan.', request:'Masukkan e-mel dan kata laluan yang sah (sehingga 128 aksara).', rateLimit:'Terlalu banyak percubaan. Cuba lagi dalam 15 minit.', server:'Tidak dapat menghubungi pelayan. Semak sambungan anda dan cuba lagi.', origin:'Buka halaman ini terus pada pelayan ZPROP dan cuba lagi.', working:'Sila tunggu…', browsing:'Terokai alatan sebelum log masuk.', forgot:'Pemulihan kata laluan belum tersedia. Hubungi pentadbir ZPROP untuk bantuan.', welcome:'RUANG KERJA ZPROP ANDA' }
   };
   Object.assign(messages.en, {
+    signInBlocked:'Your account has been blocked from signing in. Contact your administrator.',
     newPassword:'New password', confirmPassword:'Confirm password',
     confirmPlaceholder:'Enter your new password again',
     passwordMismatch:'Passwords do not match. Please enter the same password in both fields.'
   });
   Object.assign(messages.ms, {
+    signInBlocked:'Akaun anda disekat daripada log masuk. Hubungi pentadbir anda.',
     newPassword:'Kata laluan baharu', confirmPassword:'Sahkan kata laluan',
     confirmPlaceholder:'Masukkan kata laluan baharu sekali lagi',
     passwordMismatch:'Kata laluan tidak sepadan. Masukkan kata laluan yang sama dalam kedua-dua ruangan.'
@@ -44,7 +46,7 @@
     try {
       const url = new URL(next || 'landing.html', appBase);
       const relative = url.pathname.startsWith(appBase.pathname) ? url.pathname.slice(appBase.pathname.length) : null;
-      if (url.origin === appBase.origin && relative !== null && /^(?:tools\/[a-z-]+\.html|landing\.html|index\.html)?$/.test(relative)) {
+      if (url.origin === appBase.origin && relative !== null && /^(?:tools\/[a-z-]+\.html|landing\.html|index\.html|admin\.html)?$/.test(relative)) {
         url.searchParams.set('lang', language()); return url.href;
       }
     } catch {}
@@ -74,6 +76,10 @@
   async function authFetch(url, options) {
     const response = await fetch(url, { credentials:'same-origin', ...options });
     if (response.status === 401 && isTool) redirect();
+    if (response.status === 403 && isTool) {
+      const data = await response.clone().json().catch(() => ({}));
+      if (data.error === "toolsBlocked") location.replace(new URL("access-denied.html", appBase));
+    }
     return response;
   }
   function render() {
@@ -86,6 +92,11 @@
       if (user) { link.textContent = t('signOut'); link.href = '#sign-out'; link.setAttribute('role', 'button'); }
       else { link.textContent = t('signIn'); link.href = signInUrl(); link.removeAttribute('role'); }
     });
+    if (user?.role === "admin" && !document.querySelector("[data-admin-link]")) {
+      const anchor = document.querySelector(".nav-sign-in");
+      if (anchor) { const link = document.createElement("a"); link.href = new URL("admin.html", appBase); link.textContent = "Admin"; link.dataset.adminLink = "true"; anchor.before(link); }
+    }
+    if (user?.role !== "admin") document.querySelector("[data-admin-link]")?.remove();
     if (!form) return;
     document.querySelector('#sign-in-title').textContent = t(register ? 'registerTitle' : 'title');
     document.querySelector('.sign-in-subtitle').textContent = t('subtitle');
@@ -133,7 +144,7 @@
         const response = await authFetch(new URL('api/auth/' + (register ? 'register' : 'sign-in'), appBase), { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ email:form.email.value, password:form.password.value }) });
         const data = await response.json();
         if (!response.ok) { statusKey = data.error; return; }
-        form.reset(); location.assign(destination());
+        form.reset(); location.assign(data.user?.role === "admin" ? new URL("admin.html", appBase).href : destination());
       } catch { statusKey = 'server'; }
       finally { busy = false; render(); if (statusKey) document.querySelector('#auth-status').focus(); }
     });
@@ -163,6 +174,7 @@
       if (!response.ok) throw new Error();
       user = (await response.json()).user;
       if (isTool && !user) { redirect(); return false; }
+      if (isTool && user?.toolsBlocked) { location.replace(new URL("access-denied.html", appBase)); return false; }
       render(); return !!user;
     } catch {
       user = null;

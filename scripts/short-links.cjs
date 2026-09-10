@@ -6,7 +6,7 @@ const storage = path.resolve(__dirname, '../.short-links');
 const fail = (code, status = 400) => Object.assign(new Error(code), { status });
 const validSlug = slug => /^[a-zA-Z0-9_-]{2,50}$/.test(slug);
 const directory = slug => path.join(storage, crypto.createHash('sha256').update(slug.toLowerCase()).digest('hex'));
-const reservedNames = new Set(['api', 'sites', 's', 'assets', 'tools', 'scripts', 'tests', 'node_modules', 'test-results']);
+const reservedNames = new Set(['admin', 'api', 'sites', 's', 'assets', 'tools', 'scripts', 'tests', 'node_modules', 'test-results']);
 async function isReserved(slug) {
   if (reservedNames.has(slug.toLowerCase())) return true;
   try { await fs.access(path.resolve(__dirname, '..', slug)); return true; }
