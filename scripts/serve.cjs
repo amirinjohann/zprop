@@ -20,7 +20,7 @@ const bioPages = require('./bio-pages.cjs');
 const qrCodes = require('./qr-codes.cjs');
 const dashboardStats = require('./dashboard-stats.cjs');
 const dashboardEvents = require('./dashboard-events.cjs');
-const { publicOrigin } = require('../public-origin.js');
+const { publicOrigin } = require('../js/public-origin.js');
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || '127.0.0.1';
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.png': 'image/png', '.json': 'application/json', '.woff2': 'font/woff2' };
@@ -47,16 +47,16 @@ const server = http.createServer(async (req, res) => {
     const lang = new URL(req.url, 'http://localhost').searchParams.get('lang');
     return target + (['en','ms'].includes(lang) ? '?lang=' + lang : '');
   };
-  if (/^\/admin(?:-account)?(?:\.html|\/)?$/i.test(pathname) || /^\/admin(?:-account)?\.js$/i.test(pathname)) {
+  if (/^\/admin(?:-account)?(?:\.html|\/)?$/i.test(pathname) || /^\/(?:js\/)?admin(?:-account)?\.js$/i.test(pathname)) {
     res.setHeader('Cache-Control','no-store');
     res.setHeader('Vary','Cookie');
     const user = auth.session(req)?.user;
     if (!user) { const target = '/admin.html'; res.writeHead(302,{Location:'/sign-in.html?lang='+(new URL(req.url,'http://localhost').searchParams.get('lang') === 'ms' ? 'ms' : 'en')+'&next='+encodeURIComponent(target)}).end(); return; }
     if (user.role !== 'admin') { res.writeHead(403,{'Content-Type':'text/plain; charset=utf-8'}).end('Administrator access required.'); return; }
-    if (/^\/admin-account\.js$/i.test(pathname)) { res.writeHead(404).end('Not found'); return; }
+    if (/^\/(?:js\/)?admin-account\.js$/i.test(pathname)) { res.writeHead(404).end('Not found'); return; }
     if (/^\/admin-account(?:\.html|\/)?$/i.test(pathname) || /^\/admin\/?$/i.test(pathname)) { res.writeHead(302,{Location:adminTarget('/admin.html')}).end(); return; }
   }
-  const protectedPage = /^\/tools(?:\/|$)/i.test(pathname) || /^\/(tool-pages|static-site|bio-page|bio-library|qr-page|short-links-page)\.js$/i.test(pathname);
+  const protectedPage = /^\/tools(?:\/|$)/i.test(pathname) || /^\/js\/(tool-pages|static-site|bio-page|bio-library|qr-page|short-links-page)\.js$/i.test(pathname);
   if (protectedPage || pathname.startsWith('/api/')) {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Vary', 'Cookie');

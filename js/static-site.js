@@ -1,6 +1,6 @@
 (async () => {
   'use strict';
-  const base = new URL('.', document.currentScript.src);
+  const base = new URL('../', document.currentScript.src);
   const publicBase = new URL(window.ZPROP_PUBLIC_ORIGIN);
   const $ = selector => document.querySelector(selector);
   const tool = window.ZPROP_TOOLS.find(item => item.id === 'host-html');

@@ -1,4 +1,4 @@
-@font-face{font-family:Inter;src:url('assets/fonts/inter.woff2') format('woff2');font-style:normal;font-weight:100 900;font-display:swap}
+@font-face{font-family:Inter;src:url('../assets/fonts/inter.woff2') format('woff2');font-style:normal;font-weight:100 900;font-display:swap}
 
 
 :root{font-family:Inter,Arial,sans-serif;color:#25262a;background:#f5f3ee;font-synthesis:none;--accent:#896820;--muted:#73716b;--border:#e4e0d7}

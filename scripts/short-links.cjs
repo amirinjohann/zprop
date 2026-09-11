@@ -1,13 +1,13 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { publicOrigin } = require('../public-origin.js');
+const { publicOrigin } = require('../js/public-origin.js');
 const { assertRoom, created, removed } = require('./item-limit.cjs');
 const storage = path.join(require('./data-root.cjs')(), '.short-links');
 const fail = (code, status = 400) => Object.assign(new Error(code), { status });
 const validSlug = slug => /^[a-zA-Z0-9_-]{2,50}$/.test(slug);
 const directory = slug => path.join(storage, crypto.createHash('sha256').update(slug.toLowerCase()).digest('hex'));
-const reservedNames = new Set(['admin', 'api', 'sites', 's', 'assets', 'tools', 'scripts', 'tests', 'node_modules', 'test-results']);
+const reservedNames = new Set(['admin', 'api', 'sites', 's', 'assets', 'css', 'js', 'tools', 'scripts', 'tests', 'node_modules', 'test-results']);
 async function isReserved(slug) {
   if (reservedNames.has(slug.toLowerCase())) return true;
   try { await fs.access(path.resolve(__dirname, '..', slug)); return true; }

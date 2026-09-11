@@ -28,7 +28,7 @@ async function register(client){const email='admin-test-'+crypto.randomUUID()+'@
 
 test('admin authorization, all tool gates, session revocation, persistence and reporting',async({request,baseURL,adminServer})=>{
   expect((await request.get('/api/admin/overview')).status()).toBe(401);
-  for(const route of ['/admin','/admin.html','/ADMIN.HTML','/%61dmin.html','/admin.js'])expect((await request.get(route,{maxRedirects:0})).status()).toBe(302);
+  for(const route of ['/admin','/admin.html','/ADMIN.HTML','/%61dmin.html','/admin.js','/js/admin.js'])expect((await request.get(route,{maxRedirects:0})).status()).toBe(302);
   const regular=await requests.newContext({baseURL});
   try{
     const user=await register(regular);

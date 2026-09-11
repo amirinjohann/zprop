@@ -1,6 +1,6 @@
 (async () => {
   'use strict';
-  const base = new URL('.', document.currentScript.src);
+  const base = new URL('../', document.currentScript.src);
   const publishBase = new URL(window.ZPROP_PUBLIC_ORIGIN);
   const tool = window.ZPROP_TOOLS.find(item => item.id === 'bio-pages');
   const $ = selector => document.querySelector(selector);

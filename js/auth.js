@@ -2,7 +2,7 @@
   'use strict';
   // Resolve against this shared script so file:// and subdirectory installs
   // keep navigation inside the app instead of the drive or web-server root.
-  const appBase = new URL('.', document.currentScript.src);
+  const appBase = new URL('../', document.currentScript.src);
   const isToolUrl = url => url.origin === appBase.origin && url.pathname.startsWith(appBase.pathname + 'tools/');
   const isTool = isToolUrl(new URL(location.href));
   const isProfile = document.body.dataset.tool === 'profile';

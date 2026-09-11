@@ -91,7 +91,7 @@ test('signed-out tool clicks go directly to sign-in at the root and in a subdire
 });
 
 test('all tools and APIs require a server session, including encoded and uppercase routes', async ({ request }) => {
-  for (const route of ['/tools/bio-pages.html','/tools/short-links.html','/tools/transfer-files.html','/tools/vcards.html','/tools/host-html.html','/tools/qr-codes.html','/qr-page.js','/TOOLS/bio-pages.html','/%74ools/bio-pages.html','/tool-pages.js','/static-site.js','/bio-page.js','/bio-library.js']) {
+  for (const route of ['/tools/bio-pages.html','/tools/short-links.html','/tools/transfer-files.html','/tools/vcards.html','/tools/host-html.html','/tools/qr-codes.html','/js/qr-page.js','/TOOLS/bio-pages.html','/%74ools/bio-pages.html','/js/tool-pages.js','/js/static-site.js','/js/bio-page.js','/js/bio-library.js']) {
     const response = await request.get(route, { maxRedirects:0 });
     expect(response.status()).toBe(302); expect(response.headers().location).toContain('/sign-in.html?');
   }

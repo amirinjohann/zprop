@@ -84,7 +84,7 @@ test('a separate browser cannot claim another visitors link name or replace its 
 });
 
 test('root aliases protect website routes and reject redirects to themselves',async({request,baseURL})=>{
-  for(const name of ['api','tools','assets','sites','scripts','node_modules','TOOLS']){
+  for(const name of ['api','tools','assets','css','js','sites','scripts','node_modules','TOOLS']){
     const response=await request.post('/api/short-links',{data:{slug:name,destination:'https://example.com/'}});
     expect(response.status()).toBe(400);expect((await response.json()).error).toBe('linkReserved');
   }

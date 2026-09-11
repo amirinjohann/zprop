@@ -2,7 +2,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { promisify } = require('node:util');
-const { publicOrigin } = require('../public-origin.js');
+const { publicOrigin } = require('../js/public-origin.js');
 const production = process.env.NODE_ENV === 'production';
 const scrypt = promisify(crypto.scrypt);
 const storage = path.resolve(process.env.ZPROP_ACCOUNTS_DIR || path.join(__dirname, '../.accounts'));

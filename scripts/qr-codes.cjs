@@ -1,7 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const model = require('../qr-model.js');
+const model = require('../js/qr-model.js');
 const { assertRoom, created, removed } = require('./item-limit.cjs');
 const qrcode = require('qrcode-generator');
 const storage = path.join(require('./data-root.cjs')(), '.qr-codes');

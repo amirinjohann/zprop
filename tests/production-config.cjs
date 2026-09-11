@@ -3,7 +3,7 @@ process.env.NODE_ENV = 'production';
 delete process.env.AUTH_ORIGIN;
 delete process.env.AUTH_SECURE_COOKIE;
 const auth = require('../scripts/auth.cjs');
-const { publicOrigin } = require('../public-origin.js');
+const { publicOrigin } = require('../js/public-origin.js');
 (async () => {
   assert.equal(publicOrigin, 'https://zprop.tech');
   // HTTPS terminates at the proxy; the app's internal connection is HTTP.

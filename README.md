@@ -29,7 +29,7 @@ Production mode uses `https://zprop.tech` for authentication origin checks and s
 
 ## Deploy on zprop.tech
 
-The public domain is configured in `public-origin.js`. The publishing forms, copy buttons and open links use `https://zprop.tech/sites/<name>/` for websites and `https://zprop.tech/<name>` for short links and files. Uploaded-site previews use the app server so you can still preview uploads during development.
+The public domain is configured in `js/public-origin.js`. The publishing forms, copy buttons and open links use `https://zprop.tech/sites/<name>/` for websites and `https://zprop.tech/<name>` for short links and files. Uploaded-site previews use the app server so you can still preview uploads during development.
 
 1. Point the DNS records for `zprop.tech` to your hosting server and configure an HTTPS certificate for that domain.
 2. Deploy this Node app, install its dependencies with `npm ci --omit=dev`, and run `npm run start:production` under your hosting platform's process manager.
@@ -63,7 +63,7 @@ Cards and the list share one committed snapshot from `GET /api/dashboard-links`.
 
 File link, Share vCards and Static site now open saved-item libraries matching Short links, with a Create button, empty state and account-owned records. File links support open, copy, download and confirmed deletion; static sites support open, copy and confirmed deletion. Their existing upload forms open after Create. The libraries use the dashboard snapshot and live events, so new items and deletions also update Dashboard counts.
 
-New vCards save contact details privately in `.created-vcards/` through `POST /api/vcards`. They can be reopened, edited, downloaded and deleted. `GET/PUT/DELETE /api/vcards/<id>` checks ownership; updates and deletion check revisions. Editing preserves the item ID and count. Repeated creation of the same unedited card counts once. Older fingerprint-only records remain listed and deletable, but their contact details cannot be recovered. Back up `.created-vcards/` with the other private storage directories. The shared libraries live in `item-library.js`; vCard formatting and persistence live in `vcard-model.js` and `scripts/vcards.cjs`.
+New vCards save contact details privately in `.created-vcards/` through `POST /api/vcards`. They can be reopened, edited, downloaded and deleted. `GET/PUT/DELETE /api/vcards/<id>` checks ownership; updates and deletion check revisions. Editing preserves the item ID and count. Repeated creation of the same unedited card counts once. Older fingerprint-only records remain listed and deletable, but their contact details cannot be recovered. Back up `.created-vcards/` with the other private storage directories. The shared libraries live in `js/item-library.js`; vCard formatting and persistence live in `js/vcard-model.js` and `scripts/vcards.cjs`.
 
 For local bio-page testing, the creation dialog link-name prefix and published copy/open links use the current localhost or loopback address and port (for example `http://localhost:4173/sites/my-bio/`). Hosted bio pages continue to use `https://zprop.tech`.
 
@@ -93,7 +93,7 @@ Short links are created through `POST /api/short-links` and resolve directly at 
 
 File links use the existing `tools/transfer-files.html` address. Upload one `.pdf`, `.xls` or `.xlsx` file, up to 50 MiB, then optionally enter a link name. `POST /api/file-links` stores the file bytes and metadata privately alongside the shared link registry. PDFs are served inline with byte-range support; Excel files are served as downloads with their original filenames. The explicit download link also downloads PDFs. File links and short links use the same atomic name reservation, so neither can overwrite the other, including simultaneous requests or case variations. Empty, oversized, unsupported and mismatched files are rejected. Failed uploads release their reserved names. Files and links survive server restarts; deletion remains separate work.
 
-Edit `tools-catalog.js` for tool descriptions. `static-site.js` and `static-site.css` implement the site creator; `bio-page.js` and `bio-page.css` implement the bio editor; `tool-pages.js` implements the remaining editors. Server upload and serving logic lives in `scripts/static-sites.cjs` and `scripts/serve.cjs`.
+Edit `js/tools-catalog.js` for tool descriptions. `js/static-site.js` and `css/static-site.css` implement the site creator; `js/bio-page.js` and `css/bio-page.css` implement the bio editor; `js/tool-pages.js` implements the remaining editors. Server upload and serving logic lives in `scripts/static-sites.cjs` and `scripts/serve.cjs`.
 
 Bio pages start in **Your bio pages**. Choose **Create bio page** and enter a required, unique link name before customizing. Pages belong to the signed-in account. **Save draft** persists editable content and images; **Publish page** makes the page public. Reopen a published page and use **Save changes** to update the same live URL. The link name is fixed after creation; the editor omits the rename field and the API rejects rename attempts. Delete a page from the list to remove its content and public link.
 

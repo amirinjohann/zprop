@@ -1,7 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const {upgrade,socialPlatforms} = require('../bio-model.js');
+const {upgrade,socialPlatforms} = require('../js/bio-model.js');
 const { assertRoom, created, removed } = require('./item-limit.cjs');
 const storage = path.join(require('./data-root.cjs')(), '.generated-sites');
 const fail = (code, status = 400) => Object.assign(new Error(code), {status});

@@ -1,7 +1,7 @@
 ﻿const fs=require('node:fs/promises');
 const path=require('node:path');
 const crypto=require('node:crypto');
-const model=require('../vcard-model.js');
+const model=require('../js/vcard-model.js');
 const { assertRoom, created, removed } = require('./item-limit.cjs');
 const root=path.join(require('./data-root.cjs')(),'.created-vcards');
 const fail=(key,status=400)=>Object.assign(new Error(key),{status});
