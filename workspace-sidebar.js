@@ -21,6 +21,7 @@
       account:['Akaun saya','My account'], email:['E-mel','Email'], role:['Jenis akaun','Account type'],
       settings:['Urus akaun','Manage account'],
       admin:['Pentadbir','Administrator'], user:['Pengguna','User'],
+      adminHome:['Ringkasan admin','Admin overview'],
       signOut:['Log keluar','Sign out'], signingOut:['Sedang log keluar…','Signing out…'],
       error:['Log keluar tidak berjaya. Sila cuba lagi.','Could not sign out. Please try again.']
     };
@@ -44,6 +45,24 @@
       if(document.body.dataset.tool==='profile')profile.setAttribute('aria-current','page');
       sidebar.querySelectorAll('[data-profile-email]').forEach(element => { element.textContent = user?.email || '—'; element.title = user?.email || ''; });
       document.getElementById('profile-role').textContent = user ? t(user.role === 'admin' ? 'admin' : 'user') : '—';
+      const settings = document.getElementById('profile-settings-link');
+      if (settings) settings.hidden = user?.role === 'admin';
+      let adminLink = document.getElementById('sidebar-admin-link');
+      if (user?.role === 'admin') {
+        if (!adminLink) {
+          adminLink = document.createElement('a');
+          adminLink.id = 'sidebar-admin-link';
+          adminLink.className = 'profile-settings-link';
+          adminLink.dataset.local = '';
+          settings?.before(adminLink);
+        }
+        adminLink.hidden = false;
+        adminLink.dataset.sidebarCopy = 'adminHome';
+        adminLink.textContent = t('adminHome');
+        const target = new URL('../admin.html', location.href);
+        target.searchParams.set('lang', root.lang === 'en' ? 'en' : 'ms');
+        adminLink.href = target.href;
+      } else adminLink?.remove();
       signOut.disabled = busy || !user;
       signOut.querySelector('span').textContent = t(busy ? 'signingOut' : 'signOut');
       document.getElementById('profile-status').textContent = status ? t(status) : '';

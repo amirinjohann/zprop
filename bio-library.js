@@ -14,7 +14,7 @@ window.ZpropBioLibrary = {
       if(!response.ok)throw new Error(data.error||'server');return data;
     }
     const errorText=error=>t(['taken','slugError','notFound','conflict','invalidUrl','imageError','imageTotal','busy','itemLimit'].includes(error.message)?error.message:'server');
-    const atLimit=()=>loaded&&!listError&&pages.length>=5;
+    const atLimit=()=>!window.ZpropAuth?.unlimited?.()&&loaded&&!listError&&pages.length>=5;
     function renderList() {
       $('#bio-library-status').textContent=listError?t(listError):!loaded?t('loadingPages'):atLimit()?t('itemLimit'):'';
       $('#new-bio').disabled=busy||atLimit();

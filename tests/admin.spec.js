@@ -142,8 +142,7 @@ test('usage counts all six tools, saves and repeat actions while excluding delet
     for(const tool of report.tools)expect(tool.uses).toBe(before.tools.find(item=>item.id===tool.id).uses+1);
     expect((await member.put('/api/qr-codes/'+code.id,{data:{...qrInput,revision:code.revision}})).status()).toBe(200);
     expect((await member.post('/api/vcards',{data:{id:fingerprint}})).status()).toBe(200);
-    expect((await request.post('/api/vcards',{data:{id:fingerprint}})).status()).toBe(403);
-    expect((await request.delete('/api/vcards/'+fingerprint)).status()).toBe(403);
+    expect((await request.post('/api/vcards',{data:{id:crypto.randomBytes(32).toString('hex')}})).status()).toBe(200);
     const links=(await (await member.get('/api/dashboard-links')).json()).links;
     for(const link of links)expect((await member.delete('/api/dashboard-links/'+link.category+'/'+link.id,{data:{revision:link.revision}})).status()).toBe(200);
     report=await (await request.get('/api/admin/overview')).json();
@@ -266,7 +265,7 @@ test('admin account changes are denied without changing stored credentials or se
   expect(await snapshot()).toEqual(before);
 });
 
-test('admins cannot access user APIs, mutate tool storage, or switch to a user without signing out',async({request,baseURL,adminServer})=>{
+test('admins can use tools without affecting other users, usage reports, or locked account settings',async({request,baseURL,adminServer})=>{
   const member=await requests.newContext({baseURL});
   const user=await register(member);
   const administrator=await login(request);
@@ -280,29 +279,22 @@ test('admins cannot access user APIs, mutate tool storage, or switch to a user w
   const previousData=process.env.ZPROP_DATA_DIR;
   process.env.ZPROP_DATA_DIR=dataDir;
   const stats=require('../scripts/dashboard-stats.cjs');
-  const beforeStorage=await stats.summary(administrator.id,true);
   const beforeReport=await (await request.get('/api/admin/overview')).json();
   try {
-    const routes=['bio-pages','short-links','file-links','static-sites','qr-codes','vcards','dashboard-links','dashboard-stats','dashboard-events'];
-    for(const route of routes)for(const method of ['GET','POST','PUT','PATCH','DELETE']) {
-      const response=await request.fetch('/api/'+route,{method,data:method==='GET'?undefined:{id:fingerprint,slug,destination:'https://example.com'}});
-      expect(response.status(),method+' '+route).toBe(403);
-      expect(await response.json()).toEqual({error:'userAccountRequired'});
-    }
-    for(const route of ['vcards/'+fingerprint,'bio-pages/'+slug,'qr-codes/'+crypto.randomUUID(),'short-links/'+slug,'dashboard-links/vcards/'+fingerprint]) {
-      for(const method of ['GET','PUT','DELETE']) {
-        const response=await request.fetch('/api/'+route,{method,data:method==='GET'?undefined:{revision:1}});
-        expect(response.status()).toBe(403);expect((await response.json()).error).toBe('userAccountRequired');
-      }
-    }
-    expect((await request.post('/api/file-links?name=roles.pdf',{data:Buffer.from('%PDF-1.4\nTest'),headers:{'Content-Type':'application/pdf'}})).status()).toBe(403);
-    expect((await request.post('/api/static-sites?type=html',{data:'<h1>Denied</h1>',headers:{'Content-Type':'text/html'}})).status()).toBe(403);
+    expect((await request.get('/api/dashboard-stats')).status()).toBe(200);
+    expect((await request.get('/api/dashboard-links')).status()).toBe(200);
+    expect((await request.post('/api/short-links',{data:{slug:slug+'-admin',destination:'https://example.com/admin'}})).status()).toBe(201);
+    expect((await request.post('/api/vcards',{data:{state:{name:'Admin card',company:'ZPROP',phone:'+60123456789',email:'admin-card@example.com'}}})).status()).toBe(200);
+    expect((await request.get('/tools/vcards.html')).status()).toBe(200);
+    expect((await request.get('/tools/dashboard.html')).status()).toBe(200);
+    const ownedByAdmin=(await (await request.get('/api/dashboard-links')).json()).links;
+    expect(ownedByAdmin.some(link=>link.category==='short-links'&&link.id===slug+'-admin')).toBe(true);
     const registration=await request.post('/api/auth/register',{data:{email:'roles-'+crypto.randomUUID()+'@example.com',password}});
     expect(registration.status()).toBe(403);expect((await registration.json()).error).toBe('userAccountRequired');
     expect((await request.post('/api/auth/sign-in',{data:{email:user.email,password}})).status()).toBe(403);
     expect((await (await request.get('/api/auth/session')).json()).user.role).toBe('admin');
     expect((await request.get('/api/auth/profile')).status()).toBe(200);
-    expect(await stats.summary(administrator.id,true)).toEqual(beforeStorage);
+    expect((await request.patch('/api/auth/profile',{data:{avatar:null}})).status()).toBe(403);
     expect(await fs.readFile(legacyFile,'utf8')).toBe('{}');
     const afterReport=await (await request.get('/api/admin/overview')).json();
     expect(afterReport.metrics).toEqual(beforeReport.metrics);
@@ -311,6 +303,9 @@ test('admins cannot access user APIs, mutate tool storage, or switch to a user w
     expect((await member.post('/api/short-links',{data:{slug,destination:'https://example.com'}})).status()).toBe(201);
     expect((await request.get('/'+slug,{maxRedirects:0})).headers().location).toBe('https://example.com/');
     expect((await request.get('/s/'+slug,{maxRedirects:0})).status()).toBe(302);
+    const memberLinks=(await (await member.get('/api/dashboard-links')).json()).links;
+    expect(memberLinks.some(link=>link.id===slug)).toBe(true);
+    expect(memberLinks.some(link=>link.id===slug+'-admin')).toBe(false);
     await request.post('/api/auth/sign-out');
     expect((await request.post('/api/auth/sign-in',{data:{email:user.email,password}})).status()).toBe(200);
     expect((await request.get('/tools/vcards.html')).status()).toBe(200);
@@ -333,17 +328,21 @@ test('admin navigation excludes account settings and preserves language and them
     expect((await anonymous.get('/admin-account.html',{maxRedirects:0})).status()).toBe(302);
     expect((await regular.get('/admin-account.html')).status()).toBe(403);
     await login(page.request);
-    const paths=['/','/index.html','/landing.html','/sign-in.html','/tools/dashboard.html','/tools/bio-pages.html','/tools/short-links.html','/tools/transfer-files.html','/tools/vcards.html','/tools/host-html.html','/tools/qr-codes.html','/TOOLS/VCARDS.HTML','/%74ools/vcards.html'];
-    for(const path of paths) {
+    for(const path of ['/','/index.html','/landing.html','/sign-in.html']) {
       const response=await page.request.get(path+'?lang=ms',{maxRedirects:0});
       expect(response.status(),path).toBe(302);expect(response.headers().location).toBe('/admin.html?lang=ms');
       expect(response.headers()['cache-control']).toBe('no-store');
+    }
+    for(const path of ['/tools/dashboard.html','/tools/bio-pages.html','/tools/short-links.html','/tools/transfer-files.html','/tools/vcards.html','/tools/host-html.html','/tools/qr-codes.html','/TOOLS/VCARDS.HTML','/%74ools/vcards.html']) {
+      expect((await page.request.get(path+'?lang=ms',{maxRedirects:0})).status(),path).toBe(200);
     }
     expect((await page.request.get('/tools/profile.html?lang=en',{maxRedirects:0})).headers().location).toBe('/admin.html?lang=en');
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
     await page.goto('/landing.html?lang=en');
     await expect(page).toHaveURL(/\/admin.html\?lang=en$/);
-    await expect(page.locator('a[href*="tools/"], a[href*="landing.html"], a[href*="index.html"]')).toHaveCount(0);
+    await expect(page.locator('a[href*="landing.html"], a[href*="index.html"]')).toHaveCount(0);
+    await expect(page.locator('a[href*="tools/dashboard.html"]')).toHaveCount(1);
+    await expect(page.getByRole('link',{name:'Open tools',exact:true})).toBeVisible();
     await expect(page.getByRole('link',{name:'Manage account',exact:true})).toHaveCount(0);
     await expect(page.locator('a[href*="admin-account"], a[href*="profile.html"]')).toHaveCount(0);
     for(const path of ['/admin-account.html','/admin-account','/admin-account/','/ADMIN-ACCOUNT.HTML']) {
@@ -363,8 +362,29 @@ test('admin navigation excludes account settings and preserves language and them
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await page.goto('/tools/profile.html?lang=ms');await expect(page).toHaveURL(/\/admin.html\?lang=ms$/);
     await page.goBack();await expect(page).toHaveURL(/\/admin.html/);
+    await page.getByRole('link',{name:'Buka alatan',exact:true}).click();
+    await expect(page).toHaveURL(/\/tools\/dashboard\.html/);
+    await expect(page.locator('#tool-title')).toBeVisible();
+    await page.locator('#profile-toggle').click();
+    await expect(page.locator('#profile-settings-link')).toBeHidden();
+    await expect(page.locator('#sidebar-admin-link')).toBeVisible();
+    await page.locator('#sidebar-admin-link').click();
+    await expect(page).toHaveURL(/\/admin\.html/);
     expect(errors).toEqual([]);
     await page.locator('#sign-out').click();await expect(page).toHaveURL(/sign-in.html/);
     expect((await page.request.get('/admin-account.html',{maxRedirects:0})).status()).toBe(302);
   } finally {await anonymous.dispose();await regular.dispose();}
+});
+
+test('admin can save more than five items in a tool',async({page})=>{
+  const {LIMIT}=require('../scripts/item-limit.cjs');
+  await login(page.request);
+  const prefix='admin-unlim-'+crypto.randomBytes(4).toString('hex');
+  for(let i=0;i<LIMIT+1;i++){
+    expect((await page.request.post('/api/short-links',{data:{slug:prefix+i,destination:'https://example.com/'+i}})).status()).toBe(201);
+  }
+  await page.goto('/tools/short-links.html?lang=en');
+  await expect(page.locator('[data-short-slug^="'+prefix+'"]')).toHaveCount(LIMIT+1,{timeout:20000});
+  await expect(page.locator('#new-short-link')).toBeEnabled();
+  await expect(page.getByText('You can save up to 5 items in this tool. Delete one to add another.')).toHaveCount(0);
 });

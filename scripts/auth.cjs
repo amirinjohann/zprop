@@ -9,6 +9,7 @@ const storage = path.resolve(process.env.ZPROP_ACCOUNTS_DIR || path.join(__dirna
 const adminEmail = (process.env.ADMIN_EMAIL || 'zpropadmin@gmail.com').trim().toLowerCase();
 const sessions = new Map();
 const attempts = new Map();
+const adminIds = new Set();
 let accountQueue = Promise.resolve();
 const lifetime = 7 * 24 * 60 * 60 * 1000;
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
@@ -68,6 +69,13 @@ async function body(req, maxSize = 4096) {
   try { const data = JSON.parse(Buffer.concat(chunks).toString('utf8')); if (!data || typeof data !== 'object' || Array.isArray(data)) throw Error(); return data; }
   catch { throw fail('request'); }
 }
+function isAdminOwner(id) {
+  if (adminIds.has(id)) return true;
+  for (const record of sessions.values()) {
+    if (record.user.id === id && record.user.role === 'admin') { adminIds.add(id); return true; }
+  }
+  return false;
+}
 async function initialize() {
   await fs.mkdir(storage, { recursive:true });
   await recoverProfileChange();
@@ -75,15 +83,18 @@ async function initialize() {
   try {
     const existing = JSON.parse(await fs.readFile(filename, 'utf8'));
     if (existing.role !== 'admin') throw new Error('The configured admin email belongs to a regular account. Choose a different ADMIN_EMAIL.');
-    return;
-  } catch (error) { if (error.code !== 'ENOENT') throw error; }
-  // An administrator can change their login email without recreating the seed account.
-  if ((await readUsers()).some(user => user.role === 'admin')) return;
-  const salt = crypto.randomBytes(16).toString('hex');
-  const password = process.env.ADMIN_PASSWORD || 'admin1234567';
-  if (password.length < 12 || password.length > 128) throw new Error('ADMIN_PASSWORD must contain 12-128 characters.');
-  const account = { id:crypto.randomUUID(), email:adminEmail, salt, passwordHash:(await scrypt(password, salt, 64)).toString('hex'), role:'admin', createdAt:new Date().toISOString() };
-  await fs.writeFile(filename, JSON.stringify(account), { flag:'wx', mode:0o600 });
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    // An administrator can change their login email without recreating the seed account.
+    if (!(await readUsers()).some(user => user.role === 'admin')) {
+      const salt = crypto.randomBytes(16).toString('hex');
+      const password = process.env.ADMIN_PASSWORD || 'admin1234567';
+      if (password.length < 12 || password.length > 128) throw new Error('ADMIN_PASSWORD must contain 12-128 characters.');
+      const account = { id:crypto.randomUUID(), email:adminEmail, salt, passwordHash:(await scrypt(password, salt, 64)).toString('hex'), role:'admin', createdAt:new Date().toISOString() };
+      await fs.writeFile(filename, JSON.stringify(account), { flag:'wx', mode:0o600 });
+    }
+  }
+  for (const user of await readUsers()) if (user.role === 'admin') adminIds.add(user.id);
 }
 async function readUsers() {
   const users = [];
@@ -298,4 +309,4 @@ setInterval(() => {
   for (const [key, value] of sessions) if (value.expires <= Date.now()) sessions.delete(key);
   for (const [key, value] of attempts) if (value.until <= Date.now()) attempts.delete(key);
 }, 60000).unref();
-module.exports = { handle, session, sameOrigin, initialize, listUsers, setAccess, body };
+module.exports = { handle, session, sameOrigin, initialize, listUsers, setAccess, body, isAdminOwner };

@@ -4,6 +4,7 @@
     'Admin overview — ZPROP':'Ringkasan admin — ZPROP',
     'WORKSPACE':'RUANG KERJA', 'Admin navigation':'Navigasi admin', 'Overview':'Ringkasan',
     'User management':'Pengurusan pengguna', 'Access history':'Sejarah akses',
+    'Open tools':'Buka alatan',
     'Administration':'Pentadbiran', 'Manage your ZPROP workspace.':'Urus ruang kerja ZPROP anda.',
     '← Back to website':'← Kembali ke laman web', 'Sign out':'Log keluar',
     'WORKSPACE / OVERVIEW':'RUANG KERJA / RINGKASAN', 'Admin overview':'Ringkasan admin',

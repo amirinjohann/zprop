@@ -27,7 +27,6 @@ const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 
 Object.assign(types, { '.jpeg':'image/jpeg', '.gif':'image/gif', '.webp':'image/webp', '.avif':'image/avif', '.ico':'image/x-icon', '.woff':'font/woff', '.ttf':'font/ttf', '.otf':'font/otf', '.eot':'application/vnd.ms-fontobject', '.xml':'application/xml', '.mp3':'audio/mpeg', '.wav':'audio/wav', '.mp4':'video/mp4', '.webm':'video/webm', '.pdf':'application/pdf', '.txt':'text/plain; charset=utf-8' });
 function requireToolAccess(req) {
   const user = auth.session(req)?.user;
-  if (user?.role === "admin") throw Object.assign(new Error("userAccountRequired"), {status:403});
   if (!user || user.toolsBlocked) throw Object.assign(new Error(user ? "toolsBlocked" : "signInRequired"), {status:user ? 403 : 401});
 }
 let creationQueue = Promise.resolve(), pendingCreates = 0;
@@ -71,15 +70,8 @@ const server = http.createServer(async (req, res) => {
     }
   }
   const actor = auth.session(req)?.user;
-  if (actor?.role === 'admin') {
-    if (pathname.startsWith('/api/')) {
-      res.writeHead(403,{'Content-Type':'application/json'}).end(JSON.stringify({error:'userAccountRequired'})); return;
-    }
-    if (/^\/(?:index\.html|landing\.html|sign-in\.html)?$/i.test(pathname) || /^\/tools(?:\/|$)/i.test(pathname)) {
-      const target = '/admin.html';
-      res.writeHead(302,{'Cache-Control':'no-store',Vary:'Cookie',Location:adminTarget(target)}).end(); return;
-    }
-    if (protectedPage) { res.writeHead(403,{'Content-Type':'application/json'}).end(JSON.stringify({error:'userAccountRequired'})); return; }
+  if (actor?.role === 'admin' && (/^\/(?:index\.html|landing\.html|sign-in\.html)?$/i.test(pathname) || /^\/tools\/profile\.html$/i.test(pathname))) {
+    res.writeHead(302,{'Cache-Control':'no-store',Vary:'Cookie',Location:adminTarget('/admin.html')}).end(); return;
   }
   if (actor?.toolsBlocked && !/^\/tools\/profile\.html$/i.test(pathname) && (protectedPage || /^\/api\/(bio-pages|qr-codes|short-links|file-links|static-sites|vcards|dashboard-links)(\/|$)/.test(pathname))) {
     if (pathname.startsWith('/api/')) res.writeHead(403,{'Content-Type':'application/json'}).end(JSON.stringify({error:'toolsBlocked'}));
@@ -202,13 +194,19 @@ const server = http.createServer(async (req, res) => {
   if (relative.startsWith('..') || path.isAbsolute(relative) || relative.split(/[\\/]/).some(p => p.startsWith('.') || ['node_modules', 'scripts', 'tests'].includes(p))) { res.writeHead(403).end(); return; }
   fs.readFile(file, (error, data) => {
     if (error) { res.writeHead(404).end('Not found'); return; }
-    if (protectedPage && path.extname(file).toLowerCase() === '.html') {
-      // The tool document already passed the session gate. Reuse that result
-      // for its first render instead of making the editor wait for another GET.
-      const state = JSON.stringify({ user:auth.session(req)?.user || null }).replace(/</g, '\\u003c');
-      data = data.toString('utf8').replace('</head>', `<script type="application/json" id="zprop-session">${state}</script></head>`);
+    const ext = path.extname(file).toLowerCase();
+    if (ext === '.html') {
+      data = data.toString('utf8').replace(/auth\.js"/g, 'auth.js?v=2"');
+      if (protectedPage) {
+        // The tool document already passed the session gate. Reuse that result
+        // for its first render instead of making the editor wait for another GET.
+        const state = JSON.stringify({ user:auth.session(req)?.user || null }).replace(/</g, '\\u003c');
+        data = data.replace('</head>', `<script type="application/json" id="zprop-session">${state}</script></head>`);
+      }
     }
-    res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff' });
+    const headers = { 'Content-Type': types[ext] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff' };
+    if (ext === '.js') headers['Cache-Control'] = 'no-store';
+    res.writeHead(200, headers);
     res.end(data);
   });
 });

@@ -173,7 +173,7 @@
     $('#qr-library').hidden=true; editor.hidden=false; setQuery(record.id);
   }
   let codes=[], loaded=false, listStatus='loading', pendingDelete=null;
-  const atLimit=()=>loaded&&!listStatus&&codes.length>=5;
+  const atLimit=()=>!window.ZpropAuth?.unlimited?.()&&loaded&&!listStatus&&codes.length>=5;
   function renderList() {
     $('#qr-library-status').textContent=listStatus?t(listStatus):atLimit()?t('itemLimit'):'';
     $('#new-qr').disabled=busy||atLimit();

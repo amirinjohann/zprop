@@ -52,7 +52,7 @@
   function routeAdmin() {
     if (user?.role !== 'admin' || isAdminArea) return false;
     const relative = location.pathname.slice(appBase.pathname.length);
-    if (isTool || /^(?:index\.html|landing\.html|sign-in\.html)?$/i.test(relative)) {
+    if (isProfile || /^(?:index\.html|landing\.html|sign-in\.html)?$/i.test(relative)) {
       document.body.style.visibility = 'hidden'; location.replace(adminDestination()); return true;
     }
     return false;
@@ -94,7 +94,6 @@
     if (response.status === 401 && isProtected) redirect();
     if (response.status === 403 && isTool) {
       const data = await response.clone().json().catch(() => ({}));
-      if (data.error === 'userAccountRequired') { location.replace(adminDestination()); return response; }
       if (data.error === "toolsBlocked") location.replace(new URL("access-denied.html", appBase));
     }
     return response;
@@ -205,7 +204,7 @@
     }
   }
   render();
-  window.ZpropAuth = { ready:user ? Promise.resolve(!routeAdmin()) : check(), fetch:authFetch, getUser:() => user, refresh:check };
+  window.ZpropAuth = { ready:user ? Promise.resolve(!routeAdmin()) : check(), fetch:authFetch, getUser:() => user, refresh:check, unlimited:() => user?.role === 'admin' };
   window.addEventListener('storage',event=>{if(event.key==='zprop-profile-updated')check();});
   toolLinks.forEach(({ link }) => link.addEventListener('click', async event => {
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;

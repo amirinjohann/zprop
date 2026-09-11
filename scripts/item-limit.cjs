@@ -5,6 +5,7 @@ const fail = () => Object.assign(new Error('itemLimit'), { status:403 });
 const key = (ownerId, category) => ownerId + '\0' + category;
 
 async function assertRoom(ownerId, category) {
+  if (require('./auth.cjs').isAdminOwner(ownerId)) return;
   const k = key(ownerId, category);
   let n = cache.get(k);
   if (n === undefined) {

@@ -37,6 +37,9 @@
       event.viewTransition?.finished.catch(() => {});
     });
   }
+  window.addEventListener('unhandledrejection', event => {
+    if (event.reason && event.reason.message === 'Transition was skipped') event.preventDefault();
+  });
   let theme = 'light';
   try { if (localStorage.getItem(key) === 'dark') theme = 'dark'; } catch {}
   root.dataset.theme = theme;

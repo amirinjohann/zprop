@@ -17,7 +17,7 @@
   let items=[],active=null,dirty=false,baseline='',busy=false,loaded=false,error='',loading=false,pending=false,stream=null,deleted=null;
   const snapshot=()=>JSON.stringify([...form.elements].filter(el=>el.name).map(el=>[el.name,el.type==='file'?[...el.files].map(file=>[file.name,file.size,file.lastModified]):el.value]));
   const isBusy=()=>busy||form.getAttribute('aria-busy')==='true';
-  const atLimit=()=>loaded&&!error&&items.length>=5;
+  const atLimit=()=>!window.ZpropAuth?.unlimited?.()&&loaded&&!error&&items.length>=5;
   const urlFor=item=>new URL(item.url,window.ZPROP_PUBLIC_ORIGIN).href;
   function query(id){const url=new URL(location.href);id?url.searchParams.set('item',id):url.searchParams.delete('item');history.replaceState(null,'',url);}
   async function api(url,options={}){const response=await window.ZpropAuth.fetch(url,{...options,signal:AbortSignal.timeout(15000)});let data;try{data=await response.json();}catch{throw Error('error');}if(!response.ok)throw Error(data.error||'error');return data;}

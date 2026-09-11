@@ -34,7 +34,7 @@
     let data;try{data=await response.json();}catch{throw new Error('linkUnavailable');}
     if(!response.ok)throw new Error(data.error||'linkServer');return data;
   }
-  const atLimit=()=>loaded&&!listError&&records.length>=5;
+  const atLimit=()=>!window.ZpropAuth?.unlimited?.()&&loaded&&!listError&&records.length>=5;
   function renderList() {
     $('#short-library-status').textContent=listError?t(listError):!loaded?t('loading'):atLimit()?t('itemLimit'):'';
     $('#new-short-link').disabled=busy||atLimit();

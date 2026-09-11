@@ -162,7 +162,12 @@
   $('sign-out').addEventListener('click',async()=>{
     try {await api('/api/auth/sign-out',{method:'POST'});location.assign('/sign-in.html?lang='+language());}catch(error){$('status').textContent=error.message;}
   });
-  document.querySelectorAll('nav a').forEach(link=>link.addEventListener('click',()=>{document.querySelectorAll('nav a').forEach(item=>item.classList.toggle('active',item===link));}));
+  document.querySelectorAll('nav a').forEach(link=>link.addEventListener('click',event=>{
+    document.querySelectorAll('nav a').forEach(item=>item.classList.toggle('active',item===link));
+    if (!link.hasAttribute('data-admin-local')) return;
+    event.preventDefault();
+    location.assign(link.href);
+  }));
   async function start(){
     try {
       const session=await api('/api/auth/session');
