@@ -2,6 +2,15 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
+if (process.env.NODE_ENV !== 'test') {
+  try {
+    for (const line of fs.readFileSync(path.join(root, '.env'), 'utf8').split(/\r?\n/)) {
+      const match = line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)\s*$/);
+      if (!match || process.env[match[1]] !== undefined) continue;
+      process.env[match[1]] = match[2].replace(/^["']|["']$/g, '');
+    }
+  } catch (error) { if (error.code !== 'ENOENT') throw error; }
+}
 const sites = require('./static-sites.cjs');
 const links = require('./short-links.cjs');
 const fileLinks = require('./file-links.cjs');

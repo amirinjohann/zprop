@@ -3,6 +3,8 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const testStorage = path.join(__dirname,'.test-data',crypto.randomUUID());
 if (!process.env.ZPROP_DATA_DIR) process.env.ZPROP_DATA_DIR = path.join(testStorage,'data');
+if (!process.env.ZPROP_MAIL_DIR) process.env.ZPROP_MAIL_DIR = path.join(testStorage,'mail');
+if (!process.env.ZPROP_ACCOUNTS_DIR) process.env.ZPROP_ACCOUNTS_DIR = path.join(testStorage,'accounts');
 const baseURL = 'http://127.0.0.1:4174';
 module.exports = defineConfig({
   testDir: './tests',
@@ -12,8 +14,8 @@ module.exports = defineConfig({
   webServer: {
     command: 'node scripts/serve.cjs', url:baseURL, reuseExistingServer:false,
     env: { PORT:'4174', HOST:'127.0.0.1', NODE_ENV:'test', AUTH_ORIGIN:'', AUTH_SECURE_COOKIE:'0',
-      ZPROP_ACCOUNTS_DIR:path.join(testStorage,'accounts'), ZPROP_ADMIN_DIR:path.join(testStorage,'admin'),
-      ZPROP_DATA_DIR:process.env.ZPROP_DATA_DIR }
+      ZPROP_ACCOUNTS_DIR:process.env.ZPROP_ACCOUNTS_DIR, ZPROP_ADMIN_DIR:path.join(testStorage,'admin'),
+      ZPROP_DATA_DIR:process.env.ZPROP_DATA_DIR, ZPROP_MAIL_DIR:process.env.ZPROP_MAIL_DIR }
   },
   projects: [
     { name: 'desktop', use: { viewport: { width: 1440, height: 1000 } } },

@@ -1,8 +1,25 @@
 const {test,expect}=require('./auth-fixture');
 const {request:requests}=require('@playwright/test');
 const crypto=require('node:crypto');
+const fs=require('node:fs/promises');
 const path=require('node:path');
 const password='Test-password-123!';
+async function latestCode(to) {
+  const names=(await fs.readdir(process.env.ZPROP_MAIL_DIR).catch(()=>[])).sort();
+  let last=null;
+  for (const name of names) {
+    const message=JSON.parse(await fs.readFile(path.join(process.env.ZPROP_MAIL_DIR,name),'utf8'));
+    if (!to || message.to===to) last=message;
+  }
+  return last?.text.match(/\b(\d{6})\b/)?.[1];
+}
+async function changeEmail(client,email,currentPassword=password) {
+  const pending=await client.patch('/api/auth/profile',{data:{email,currentPassword}});
+  expect(pending.status()).toBe(202);
+  const code=await latestCode(email);
+  expect(code).toMatch(/^\d{6}$/);
+  return client.patch('/api/auth/profile',{data:{email,currentPassword,code}});
+}
 
 test('profile changes require authentication and current credentials, retain ownership, and revoke other sessions',async({request,baseURL})=>{
   const initial=(await (await request.get('/api/auth/session')).json()).user;
@@ -20,7 +37,8 @@ test('profile changes require authentication and current credentials, retain own
     expect((await request.patch('/api/auth/profile',{data:{role:'admin'}})).status()).toBe(400);
     expect((await request.patch('/api/auth/profile',{data:{avatar:'data:image/svg+xml;base64,PHN2Zz4='}})).status()).toBe(400);
     expect((await request.patch('/api/auth/profile',{data:{email:'bad',currentPassword:password}})).status()).toBe(400);
-    const changed=await request.patch('/api/auth/profile',{data:{email,currentPassword:password}});
+    expect((await request.patch('/api/auth/profile',{data:{email,currentPassword:password,code:'000000'}})).status()).toBe(400);
+    const changed=await changeEmail(request,email);
     expect(changed.status()).toBe(200);expect((await changed.json()).user).toMatchObject({id:initial.id,email,role:'user'});
     expect((await (await other.get('/api/auth/session')).json()).user).toBeNull();
     expect((await other.post('/api/auth/sign-in',{data:{email:initial.email,password}})).status()).toBe(401);
@@ -47,7 +65,14 @@ test('simultaneous email changes cannot take over another account',async({reques
     expect((await request.patch('/api/auth/profile',{data:{email:otherEmail,currentPassword:password}})).status()).toBe(409);
     expect((await (await request.get('/api/auth/session')).json()).user.email).toBe(original.email);
     const target='auth-'+crypto.randomUUID()+'@example.com';
-    const results=await Promise.all([request,other].map(client=>client.patch('/api/auth/profile',{data:{email:target,currentPassword:password}})));
+    expect((await request.patch('/api/auth/profile',{data:{email:target,currentPassword:password}})).status()).toBe(202);
+    const firstCode=await latestCode(target);
+    expect((await other.patch('/api/auth/profile',{data:{email:target,currentPassword:password}})).status()).toBe(202);
+    const secondCode=await latestCode(target);
+    const results=await Promise.all([
+      request.patch('/api/auth/profile',{data:{email:target,currentPassword:password,code:firstCode}}),
+      other.patch('/api/auth/profile',{data:{email:target,currentPassword:password,code:secondCode}})
+    ]);
     expect(results.map(response=>response.status()).sort()).toEqual([200,409]);
     const one=(await (await request.get('/api/auth/profile')).json()).user;
     const two=(await (await other.get('/api/auth/profile')).json()).user;
@@ -73,6 +98,9 @@ test('profile settings save email, password and photo, with bilingual controls a
   await page.locator('#profile-email').fill(email);await page.locator('#email-current-password').fill('incorrect');
   await page.locator('#email-form button[type=submit]').click();await expect(page.locator('#email-status')).toHaveText('Current password is incorrect.');
   await page.locator('#email-current-password').fill(password);await page.locator('#email-form button[type=submit]').click();
+  await expect(page.locator('#email-status')).toContainText('A code was sent');
+  await page.locator('#email-code').fill(await latestCode(email));
+  await page.locator('#email-form button[type=submit]').click();
   await expect(page.locator('#email-status')).toContainText('Email saved.');
   await expect(page.locator('#profile-toggle [data-profile-email]')).toHaveText(email);
   await page.locator('#password-current').fill(password);await page.locator('#password-new').fill('Updated-password-123!');await page.locator('#password-confirm').fill('Different-password-123!');

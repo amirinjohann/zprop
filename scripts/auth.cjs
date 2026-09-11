@@ -16,6 +16,7 @@ const fail = (error, status = 400) => Object.assign(new Error(error), { status }
 const json = (res, status, body) => res.writeHead(status, { 'Content-Type':'application/json', 'Cache-Control':'no-store' }).end(JSON.stringify(body));
 const token = req => (req.headers.cookie || '').split(';').map(part => part.trim()).find(part => part.startsWith('zprop_session='))?.slice(14);
 const publicUser = account => ({ id:account.id, email:account.email, role:account.role === 'admin' ? 'admin' : 'user', toolsBlocked:!!account.toolsBlocked, avatarUrl:account.avatar ? '/api/auth/avatar?v='+hash(account.avatar).slice(0,16) : null });
+const mailEnabled = () => !!(process.env.ZPROP_MAIL_DIR || (process.env.SMTP_HOST && process.env.SMTP_FROM));
 const journal = path.join(storage, '.profile-change.json');
 async function atomicWrite(filename, value) {
   const temporary = filename + '.' + crypto.randomUUID() + '.tmp';
@@ -142,6 +143,36 @@ function validateAvatar(value) {
   } catch {throw fail('image');}
   return value;
 }
+function codeValid(record, value, email) {
+  return !!record?.hash && record.email === email && record.hash === hash(value) && Date.parse(record.expires) > Date.now();
+}
+async function sendMail(message) {
+  try {
+    if (process.env.ZPROP_MAIL_DIR) {
+      await fs.mkdir(process.env.ZPROP_MAIL_DIR, { recursive:true });
+      await fs.writeFile(path.join(process.env.ZPROP_MAIL_DIR, Date.now() + '-' + crypto.randomBytes(4).toString('hex') + '.json'), JSON.stringify({ to:message.to, subject:message.subject, text:message.text }), { flag:'wx' });
+      return true;
+    }
+    if (!process.env.SMTP_HOST || !process.env.SMTP_FROM) return false;
+    const port = Number(process.env.SMTP_PORT || 587);
+    await require('nodemailer').createTransport({
+      host:process.env.SMTP_HOST, port, secure:port === 465,
+      auth:process.env.SMTP_USER ? { user:process.env.SMTP_USER, pass:process.env.SMTP_PASS } : undefined
+    }).sendMail({ from:process.env.SMTP_FROM, to:message.to, subject:message.subject, text:message.text });
+    return true;
+  } catch { return false; }
+}
+async function sendEmailChangeCode(email) {
+  if (!mailEnabled()) throw fail('mailDisabled', 503);
+  const value = String(crypto.randomInt(100000, 1000000));
+  const sent = await sendMail({
+    to:email,
+    subject:'Your ZPROP email code / Kod e-mel ZPROP anda',
+    text:'Your ZPROP email change code is ' + value + '.\nKod tukar e-mel ZPROP anda ialah ' + value + '.\n\nThis code expires in 15 minutes. / Kod ini tamat dalam 15 minit.'
+  });
+  if (!sent) throw fail('mailDisabled', 503);
+  return { hash:hash(value), email, expires:new Date(Date.now() + 15 * 60 * 1000).toISOString() };
+}
 async function profileRequest(req,res,pathname) {
   if (!session(req)) throw fail('signInRequired',401);
   if (session(req).user.role==='admin' && req.method!=='GET') throw fail('adminAccountLocked',403);
@@ -156,7 +187,7 @@ async function profileRequest(req,res,pathname) {
   if(pathname!=='/api/auth/profile' || req.method!=='PATCH')throw fail('method',405);
   if(!sameOrigin(req))throw fail('origin',403);
   const data=await body(req,710000), keys=Object.keys(data);
-  if(!keys.length || keys.some(key=>!['email','newPassword','currentPassword','avatar'].includes(key)))throw fail('request');
+  if(!keys.length || keys.some(key=>!['email','newPassword','currentPassword','avatar','code'].includes(key)))throw fail('request');
   if(!keys.some(key=>['email','newPassword','avatar'].includes(key)))throw fail('request');
   await queued(async () => {
     const actor=session(req)?.user;if(!actor)throw fail('signInRequired',401);
@@ -180,8 +211,18 @@ async function profileRequest(req,res,pathname) {
         if(email===adminEmail && account.role!=='admin')throw fail('exists',409);
         try {await fs.access(path.join(storage,hash(email)+'.json'));throw fail('exists',409);}
         catch(error){if(error.code!=='ENOENT')throw error;}
-      }
-      account.email=email;
+        const code=typeof data.code==='string'?data.code.replace(/\s/g,''):'';
+        if(!code) {
+          account.emailChange=await sendEmailChangeCode(email);
+          account.updatedAt=new Date().toISOString();
+          await atomicWrite(filename,account);
+          json(res,202,{pending:true});
+          return;
+        }
+        if(!codeValid(account.emailChange,code,email))throw fail('code');
+        delete account.emailChange;
+        account.email=email;
+      } else delete account.emailChange;
     }
     if(Object.hasOwn(data,'newPassword')) {
       if(typeof data.newPassword!=='string'||data.newPassword.length<12||data.newPassword.length>128)throw fail('password');

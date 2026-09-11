@@ -9,7 +9,7 @@ npm install
 npm start
 ```
 
-Open **http://localhost:4173**. On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`.
+Open **http://localhost:4173**. On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`. Copy `.env.example` to `.env` for SMTP if users should be able to change their email; `npm start` loads that file when present. Playwright tests do not read `.env`.
 
 Sign-in and all tools require the Node server. Open http://localhost:4173. Serving files directly through Laragon/Apache does not enforce server authentication; route the app through this server and keep private storage outside any separate static web root.
 
@@ -19,7 +19,11 @@ Opening the sign-in page as a local HTML file automatically takes you to http://
 
 Open `sign-in.html` and choose **Create account** with an email address and a password of 12–128 characters. Registration signs you in and returns you to the requested tool. Use **Sign out** in the header to revoke the session. All six tool pages and creation APIs require authentication. The homepage and shared sites, short links and file links remain public.
 
-Accounts persist in the private `.accounts/` directory with salted scrypt password hashes. Random session tokens use HTTP-only, SameSite cookies and expire after seven days. Sessions are held in memory, so restarting the server requires signing in again. Authentication requests have origin checks and a limit of 30 unsuccessful attempts per IP per 15 minutes. Password reset and email verification are not configured.
+Accounts persist in the private `.accounts/` directory with salted scrypt password hashes. Random session tokens use HTTP-only, SameSite cookies and expire after seven days. Sessions are held in memory, so restarting the server requires signing in again. Authentication requests have origin checks and a limit of 30 unsuccessful attempts per IP per 15 minutes.
+
+Changing a profile email sends a 6-digit code to the **new** address. The change completes only after that code is entered, along with the current password. Set `SMTP_HOST`, `SMTP_FROM`, and usually `SMTP_PORT`, `SMTP_USER` and `SMTP_PASS` on the host. Never commit SMTP passwords or log the codes. Without SMTP, sign-in still works; email changes are rejected until mail is configured.
+
+Keep one Node process: sessions and the item-creation queue are in memory.
 
 Production mode uses `https://zprop.tech` for authentication origin checks and sets Secure session cookies for HTTPS. `AUTH_ORIGIN` can override the exact allowed origin. Do not expose `.accounts/` through Apache or another file server.
 
@@ -33,7 +37,7 @@ The public domain is configured in `public-origin.js`. The publishing forms, cop
 4. Configure the proxy to accept uploads up to 256 MiB and allow enough time for uploads and ZIP extraction. Keep `.accounts/`, `.generated-sites/` and `.short-links/` on persistent private storage across deployments, with backups. Use one Node process with the current in-memory session implementation.
 5. Verify account creation, site publishing and opening a shared site while signed out through the public HTTPS domain. DNS and hosting must be connected before public links resolve to this app.
 
-Serve the app through Node, including `/sites/` and all APIs, rather than uploading only the HTML files to a static host. Existing saved sites and links use the same paths after migration. Password recovery, email verification, per-user storage quotas and a site-management interface remain separate features.
+Serve the app through Node, including `/sites/` and all APIs, rather than uploading only the HTML files to a static host. Existing saved sites and links use the same paths after migration. Set SMTP on the host so members can confirm an email change with a code; per-user storage quotas remain a separate feature.
 
 ## Static sites
 
@@ -75,7 +79,7 @@ BM/EN and light/dark preferences persist across the dashboard, sign-in and tool 
 
 The Dashboard and all six tool pages share a collapsible sidebar. The menu button switches to an icon rail on desktop and hides the tool navigation on mobile; the choice persists across pages. The Profile tab stays at the bottom and opens account details with the signed-in email, account type and sign-out action. Close it with the same tab, its close button, Escape or a click outside. Profile details follow the selected language and theme.
 
-Choose **Profile → Manage account** (`/tools/profile.html`) to update your email, password or profile photo. Email/password changes require your current password, keep your account ID and owned items, rotate the current session and revoke other sessions. Email addresses must be unique; passwords use 12–128 characters. Administrators can change their email without recreating the initial admin on restart. Manage account remain accessible when tool access is blocked.
+Choose **Profile → Manage account** (`/tools/profile.html`) to update your email, password or profile photo. An email change sends a 6-digit code to the new address; the change completes only after that code and the current password are submitted. Password changes require the current password. Both keep your account ID and owned items, rotate the current session and revoke other sessions. Email addresses must be unique; passwords use 12–128 characters. Administrators can change their email without recreating the initial admin on restart. Manage account remain accessible when tool access is blocked.
 
 Photos accept PNG/JPG/WEBP uploads up to 5 MB, are cropped to a 256px square PNG in the browser, and are checked and stored in private account storage. Preview, save, cancel and removal are supported. The avatar is served only to its signed-in owner and appears in the sidebar. `/api/auth/profile` supports authenticated GET/PATCH and `/api/auth/avatar` serves the photo. Account writes are serialized; a private recovery journal completes interrupted credential changes on restart. Back up the complete `.accounts/` directory including hidden files.
 

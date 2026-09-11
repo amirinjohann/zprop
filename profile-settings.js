@@ -7,8 +7,12 @@
     suite:['ALATAN ZPROP','ZPROP TOOLS'],allTools:['Semua alatan','All tools'],help:['Perlukan bantuan?','Need help?'],
     photoTitle:['Gambar profil','Profile photo'],photoHelp:['PNG, JPG atau WEBP, sehingga 5 MB. Gambar dipotong kepada bentuk segi empat.','PNG, JPG or WEBP, up to 5 MB. Your photo is cropped to a square.'],
     choosePhoto:['Pilih gambar','Choose photo'],removePhoto:['Buang gambar','Remove photo'],savePhoto:['Simpan gambar','Save photo'],cancel:['Batal','Cancel'],
-    emailTitle:['Alamat e-mel','Email address'],emailHelp:['Gunakan e-mel baharu untuk log masuk selepas disimpan. Item anda kekal dalam akaun yang sama.','Use your new email to sign in after saving. Your items stay in the same account.'],
+    emailTitle:['Alamat e-mel','Email address'],emailHelp:['Kami akan hantar kod ke e-mel baharu. Masukkan kod itu untuk menukar. Item anda kekal dalam akaun yang sama.','We will send a code to the new email. Enter that code to finish the change. Your items stay in the same account.'],
     email:['E-mel baharu','New email'],currentPassword:['Kata laluan semasa','Current password'],saveEmail:['Simpan e-mel','Save email'],
+    sendCode:['Hantar kod','Send code'],emailCode:['Kod e-mel','Email code'],
+    codeSent:['Kod telah dihantar ke e-mel baharu. Masukkan kod itu di bawah.','A code was sent to the new email. Enter it below.'],
+    code:['Kod itu tidak sah atau telah tamat. Hantar kod baharu.','That code is invalid or has expired. Send a new code.'],
+    mailDisabled:['Penghantaran e-mel belum dikonfigurasi. Minta hos menetapkan SMTP.','Email sending is not configured. Ask the host to set SMTP.'],
     passwordTitle:['Kata laluan','Password'],passwordHelp:['Gunakan 12–128 aksara. Perubahan e-mel atau kata laluan akan menamatkan sesi log masuk lain.','Use 12–128 characters. Changing your email or password ends other sign-in sessions.'],
     newPassword:['Kata laluan baharu','New password'],confirmPassword:['Sahkan kata laluan baharu','Confirm new password'],savePassword:['Simpan kata laluan','Save password'],
     loading:['Memuatkan profil…','Loading profile…'],saving:['Menyimpan…','Saving…'],retry:['Cuba lagi','Try again'],
@@ -23,7 +27,7 @@
   };
   const language=()=>document.documentElement.lang==='en'?1:0;
   const t=key=>(copy[key]||copy.server)[language()];
-  let user=null,busy=false,photoDirty=false,pendingPhoto=null,photoTask=0;
+  let user=null,busy=false,photoDirty=false,pendingPhoto=null,photoTask=0,emailPending=false;
   const messages={settings:'loading',photo:'',email:'',password:''};
   function render() {
     document.title=t('title')+' — ZPROP';$('tool-title').textContent=t('title');$('tool-tag').textContent=t('tag');$('tool-description').textContent=t('description');
@@ -36,6 +40,10 @@
     document.querySelectorAll('.profile-settings fieldset').forEach(fieldset=>fieldset.disabled=busy||!user);
     $('save-photo').disabled=!photoDirty;$('cancel-photo').disabled=!photoDirty;
     $('remove-photo').disabled=!(photoDirty?pendingPhoto:user?.avatarUrl);
+    $('email-code-group').hidden=!emailPending;
+    $('email-code').required=emailPending;
+    $('cancel-email-code').hidden=!emailPending;
+    $('save-email').textContent=t(emailPending?'saveEmail':'sendCode');
     $('settings-retry').hidden=!!user||busy;
     const source=photoDirty?pendingPhoto:user?.avatarUrl;
     if(source){if($('settings-avatar').getAttribute('src')!==source)$('settings-avatar').src=source;}
@@ -47,7 +55,8 @@
   async function api(options) {
     const response=await window.ZpropAuth.fetch('/api/auth/profile',{cache:'no-store',...options});
     const data=await response.json();
-    if(!response.ok)throw Error(({currentPassword:'wrongPassword',email:'invalidEmail',exists:'exists',password:'password',image:'image',rateLimit:'rateLimit'})[data.error]||'server');
+    if(response.status===202&&data.pending)return {pending:true};
+    if(!response.ok)throw Error(({currentPassword:'wrongPassword',email:'invalidEmail',exists:'exists',password:'password',image:'image',rateLimit:'rateLimit',code:'code',mailDisabled:'mailDisabled'})[data.error]||'server');
     return data.user;
   }
   async function load() {
@@ -59,9 +68,11 @@
     if(busy||!user)return;
     busy=true;messages[section]='saving';render();
     try {
-      user=await api({method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+      const result=await api({method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+      if(result?.pending){emailPending=true;messages.email='codeSent';return;}
+      user=result;
       if(section==='photo'){photoDirty=false;pendingPhoto=null;$('profile-photo').value='';}
-      if(section==='email'){$('profile-email').value=user.email;$('email-current-password').value='';}
+      if(section==='email'){emailPending=false;$('profile-email').value=user.email;$('email-current-password').value='';$('email-code').value='';}
       if(section==='password')$('password-form').reset();
       await window.ZpropAuth.refresh();
       try{localStorage.setItem('zprop-profile-updated',String(Date.now()));}catch{}
@@ -69,12 +80,19 @@
     } catch(error){messages[section]=Object.hasOwn(copy,error.message)?error.message:'server';}
     finally{busy=false;render();}
   }
-  $('email-form').addEventListener('submit',event=>{event.preventDefault();save('email',{email:$('profile-email').value,currentPassword:$('email-current-password').value},'savedEmail');});
+  $('email-form').addEventListener('submit',event=>{
+    event.preventDefault();
+    const data={email:$('profile-email').value,currentPassword:$('email-current-password').value};
+    if(emailPending)data.code=$('email-code').value;
+    save('email',data,'savedEmail');
+  });
   $('password-form').addEventListener('submit',event=>{
     event.preventDefault();
     if($('password-new').value!==$('password-confirm').value){messages.password='mismatch';render();$('password-confirm').focus();return;}
     save('password',{currentPassword:$('password-current').value,newPassword:$('password-new').value},'savedPassword');
   });
+  $('profile-email').addEventListener('input',()=>{if(emailPending){emailPending=false;$('email-code').value='';messages.email='';render();}});
+  $('cancel-email-code').addEventListener('click',()=>{emailPending=false;$('email-code').value='';messages.email='';render();});
   $('photo-form').addEventListener('submit',event=>{event.preventDefault();if(photoDirty)save('photo',{avatar:pendingPhoto},'savedPhoto');});
   $('profile-photo').addEventListener('change',async()=>{
     const file=$('profile-photo').files[0], task=++photoTask;if(!file)return;
@@ -94,7 +112,7 @@
   $('remove-photo').addEventListener('click',()=>{photoTask++;pendingPhoto=null;photoDirty=true;messages.photo='photoPending';$('profile-photo').value='';render();});
   $('cancel-photo').addEventListener('click',()=>{photoTask++;pendingPhoto=null;photoDirty=false;messages.photo='';$('profile-photo').value='';render();});
   $('settings-retry').addEventListener('click',load);
-  const dirty=()=>photoDirty||!!user&&($('profile-email').value.trim()!==user.email||$('password-new').value||$('password-current').value||$('email-current-password').value);
+  const dirty=()=>photoDirty||emailPending||!!user&&($('profile-email').value.trim()!==user.email||$('password-new').value||$('password-current').value||$('email-current-password').value||$('email-code').value);
   window.addEventListener('beforeunload',event=>{if(dirty()||busy&&user){event.preventDefault();event.returnValue='';}});
   document.addEventListener('zprop:language',render);
   document.addEventListener('zprop:session',()=>{
