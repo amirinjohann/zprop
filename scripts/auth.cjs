@@ -6,7 +6,7 @@ const { publicOrigin } = require('../public-origin.js');
 const production = process.env.NODE_ENV === 'production';
 const scrypt = promisify(crypto.scrypt);
 const storage = path.resolve(process.env.ZPROP_ACCOUNTS_DIR || path.join(__dirname, '../.accounts'));
-const adminEmail = (process.env.ADMIN_EMAIL || 'zpropadmin@gmail.com').trim().toLowerCase();
+const adminEmail = (process.env.ADMIN_EMAIL || 'farhan0701@gmail.com').trim().toLowerCase();
 const sessions = new Map();
 const attempts = new Map();
 const adminIds = new Set();

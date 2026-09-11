@@ -191,7 +191,8 @@ const server = http.createServer(async (req, res) => {
   }
   const file = path.resolve(root, '.' + (pathname.endsWith('/') ? pathname + 'index.html' : pathname));
   const relative = path.relative(root, file);
-  if (relative.startsWith('..') || path.isAbsolute(relative) || relative.split(/[\\/]/).some(p => p.startsWith('.') || ['node_modules', 'scripts', 'tests'].includes(p))) { res.writeHead(403).end(); return; }
+  const blockedNames = new Set(['reference.html', 'listings-reference.html']);
+  if (relative.startsWith('..') || path.isAbsolute(relative) || relative.split(/[\\/]/).some(p => p.startsWith('.') || ['node_modules', 'scripts', 'tests'].includes(p) || blockedNames.has(p.toLowerCase()))) { res.writeHead(403).end(); return; }
   fs.readFile(file, (error, data) => {
     if (error) { res.writeHead(404).end('Not found'); return; }
     const ext = path.extname(file).toLowerCase();
