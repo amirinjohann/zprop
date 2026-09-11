@@ -20,6 +20,7 @@ test('homepage keeps the phone landing design and links to all six tools without
   await page.screenshot({path:`test-results/zprop-${info.project.name}.png`, fullPage:true});
   await page.locator('.portal-hero .portal-primary-button').click();
   await expect(page).toHaveURL(/tools\/host-html.html\?lang=ms/);
+  await page.locator('#new-item').click();
   await expect(page.locator('#create-site')).toBeVisible();
   expect(errors).toEqual([]); expect(bad).toEqual([]);
 });

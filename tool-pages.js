@@ -142,7 +142,7 @@
       finally {form.removeAttribute('aria-busy');for(const control of form.querySelectorAll('input,button'))control.disabled=false;}
     }
     if(action==='downloadHtml'){
-      const html=tool.id==='host-html'?input('html').value:`<!DOCTYPE html><html lang="${language?'en':'ms'}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(val('name'))}</title><style>body{background:#f8f8f2;color:#183e32;font-family:Georgia,serif;padding:40px 20px}.bio-preview{max-width:400px;margin:auto;background:white;border:1px solid #dce1d7;padding:35px;text-align:center}.bio-avatar{font-size:40px}h3{font-size:30px}p{white-space:pre-wrap;line-height:1.7}a{display:block;background:#183e32;color:white;padding:16px;text-decoration:none}</style></head><body><main class="bio-preview">${bioMarkup()}</main></body></html>`;
+      const html=tool.id==='host-html'?input('html').value:`<!DOCTYPE html><html lang="${language?'en':'ms'}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>${esc(val('name'))}</title><style>body{background:#f8f8f2;color:#183e32;font-family:Georgia,serif;padding:40px 20px;overflow-wrap:anywhere}img{max-width:100%;height:auto}.bio-preview{max-width:400px;margin:auto;background:white;border:1px solid #dce1d7;padding:35px;text-align:center}.bio-avatar{font-size:40px}h3{font-size:30px}p{white-space:pre-wrap;line-height:1.7}a{display:block;background:#183e32;color:white;padding:16px;text-decoration:none}</style></head><body><main class="bio-preview">${bioMarkup()}</main></body></html>`;
       download(html,'zprop-page.html','text/html;charset=utf-8');
     }
   }));
