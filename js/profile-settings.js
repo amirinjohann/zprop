@@ -13,6 +13,7 @@
     codeSent:['Kod telah dihantar ke e-mel baharu. Masukkan kod itu di bawah.','A code was sent to the new email. Enter it below.'],
     code:['Kod itu tidak sah atau telah tamat. Hantar kod baharu.','That code is invalid or has expired. Send a new code.'],
     mailDisabled:['Penghantaran e-mel belum dikonfigurasi. Minta hos menetapkan SMTP.','Email sending is not configured. Ask the host to set SMTP.'],
+    mailFailed:['Tidak dapat menghantar e-mel. Semak kata laluan aplikasi Gmail.','Could not send the email. Check the Gmail App Password.'],
     passwordTitle:['Kata laluan','Password'],passwordHelp:['Gunakan 12–128 aksara. Perubahan e-mel atau kata laluan akan menamatkan sesi log masuk lain.','Use 12–128 characters. Changing your email or password ends other sign-in sessions.'],
     newPassword:['Kata laluan baharu','New password'],confirmPassword:['Sahkan kata laluan baharu','Confirm new password'],savePassword:['Simpan kata laluan','Save password'],
     loading:['Memuatkan profil…','Loading profile…'],saving:['Menyimpan…','Saving…'],retry:['Cuba lagi','Try again'],
@@ -56,7 +57,7 @@
     const response=await window.ZpropAuth.fetch('/api/auth/profile',{cache:'no-store',...options});
     const data=await response.json();
     if(response.status===202&&data.pending)return {pending:true};
-    if(!response.ok)throw Error(({currentPassword:'wrongPassword',email:'invalidEmail',exists:'exists',password:'password',image:'image',rateLimit:'rateLimit',code:'code',mailDisabled:'mailDisabled'})[data.error]||'server');
+    if(!response.ok)throw Error(({currentPassword:'wrongPassword',email:'invalidEmail',exists:'exists',password:'password',image:'image',rateLimit:'rateLimit',code:'code',mailDisabled:'mailDisabled',mailFailed:'mailFailed'})[data.error]||'server');
     return data.user;
   }
   async function load() {

@@ -17,7 +17,7 @@ const fail = (error, status = 400) => Object.assign(new Error(error), { status }
 const json = (res, status, body) => res.writeHead(status, { 'Content-Type':'application/json', 'Cache-Control':'no-store' }).end(JSON.stringify(body));
 const token = req => (req.headers.cookie || '').split(';').map(part => part.trim()).find(part => part.startsWith('zprop_session='))?.slice(14);
 const publicUser = account => ({ id:account.id, email:account.email, role:account.role === 'admin' ? 'admin' : 'user', toolsBlocked:!!account.toolsBlocked, avatarUrl:account.avatar ? '/api/auth/avatar?v='+hash(account.avatar).slice(0,16) : null });
-const mailEnabled = () => !!(process.env.ZPROP_MAIL_DIR || (process.env.SMTP_HOST && process.env.SMTP_FROM));
+const mailEnabled = () => !!(process.env.ZPROP_MAIL_DIR || (process.env.SMTP_HOST && process.env.SMTP_FROM && (!process.env.SMTP_USER || process.env.SMTP_PASS)));
 const journal = path.join(storage, '.profile-change.json');
 async function atomicWrite(filename, value) {
   const temporary = filename + '.' + crypto.randomUUID() + '.tmp';
@@ -168,21 +168,43 @@ async function sendMail(message) {
     const port = Number(process.env.SMTP_PORT || 587);
     await require('nodemailer').createTransport({
       host:process.env.SMTP_HOST, port, secure:port === 465,
-      auth:process.env.SMTP_USER ? { user:process.env.SMTP_USER, pass:process.env.SMTP_PASS } : undefined
+      auth:process.env.SMTP_USER ? { user:process.env.SMTP_USER, pass:process.env.SMTP_PASS } : undefined,
+      tls: process.env.SMTP_TLS_REJECT_UNAUTHORIZED === '0' ? { rejectUnauthorized:false } : undefined
     }).sendMail({ from:process.env.SMTP_FROM, to:message.to, subject:message.subject, text:message.text });
     return true;
-  } catch { return false; }
+  } catch (error) {
+    console.error('SMTP send failed:', error.code || error.message);
+    return false;
+  }
 }
-async function sendEmailChangeCode(email) {
+async function sendEmailCode(email, kind) {
   if (!mailEnabled()) throw fail('mailDisabled', 503);
   const value = String(crypto.randomInt(100000, 1000000));
+  const reset = kind === 'password';
   const sent = await sendMail({
     to:email,
-    subject:'Your ZPROP email code / Kod e-mel ZPROP anda',
-    text:'Your ZPROP email change code is ' + value + '.\nKod tukar e-mel ZPROP anda ialah ' + value + '.\n\nThis code expires in 15 minutes. / Kod ini tamat dalam 15 minit.'
+    subject: reset
+      ? 'Your ZPROP password code / Kod kata laluan ZPROP anda'
+      : 'Your ZPROP email code / Kod e-mel ZPROP anda',
+    text: reset
+      ? 'Your ZPROP password reset code is ' + value + '.\nKod tetapan semula kata laluan ZPROP anda ialah ' + value + '.\n\nThis code expires in 15 minutes. / Kod ini tamat dalam 15 minit.'
+      : 'Your ZPROP email change code is ' + value + '.\nKod tukar e-mel ZPROP anda ialah ' + value + '.\n\nThis code expires in 15 minutes. / Kod ini tamat dalam 15 minit.'
   });
-  if (!sent) throw fail('mailDisabled', 503);
+  if (!sent) throw fail('mailFailed', 503);
   return { hash:hash(value), email, expires:new Date(Date.now() + 15 * 60 * 1000).toISOString() };
+}
+const sendEmailChangeCode = email => sendEmailCode(email, 'email');
+function emailLimit(key) {
+  let limit = attempts.get(key);
+  if (!limit || limit.until <= Date.now()) { limit = { count:0, until:Date.now() + 15 * 60 * 1000 }; attempts.set(key, limit); }
+  if (++limit.count > 10) throw fail('rateLimit', 429);
+  return limit;
+}
+function validEmail(email) {
+  return email.length > 0 && email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+function revokeSessions(id) {
+  for (const [key, record] of sessions) if (record.user.id === id) sessions.delete(key);
 }
 async function profileRequest(req,res,pathname) {
   if (!session(req)) throw fail('signInRequired',401);
@@ -266,7 +288,7 @@ async function handle(req, res, pathname) {
       sessions.delete(hash(token(req) || ''));
       res.setHeader('Set-Cookie', cookie(req, '', 0)); json(res, 200, { ok:true }); return true;
     }
-    if (!['/api/auth/sign-in', '/api/auth/register'].includes(pathname)) throw fail('notFound', 404);
+    if (!['/api/auth/sign-in', '/api/auth/register', '/api/auth/forgot-password', '/api/auth/reset-password'].includes(pathname)) throw fail('notFound', 404);
     if (pathname.endsWith('/register') && session(req)?.user.role === 'admin') throw fail('userAccountRequired',403);
     const ip = req.socket.remoteAddress;
     let limit = attempts.get(ip);
@@ -274,8 +296,51 @@ async function handle(req, res, pathname) {
     if (++limit.count > 30) throw fail('rateLimit', 429);
     const data = await body(req);
     const email = typeof data?.email === 'string' ? data.email.trim().toLowerCase() : '';
+    if (pathname === '/api/auth/forgot-password') {
+      if (!validEmail(email)) throw fail('email');
+      if (!mailEnabled()) throw fail('mailDisabled', 503);
+      emailLimit('reset:' + email);
+      await queued(async () => {
+        const filename = path.join(storage, hash(email) + '.json');
+        let account;
+        try { account = JSON.parse(await fs.readFile(filename, 'utf8')); }
+        catch (error) { if (error.code !== 'ENOENT') throw error; }
+        if (account && !account.signInBlocked) {
+          account.passwordReset = await sendEmailCode(email, 'password');
+          account.updatedAt = new Date().toISOString();
+          await atomicWrite(filename, account);
+        }
+        limit.count--;
+        json(res, 202, { pending:true });
+      });
+      return true;
+    }
+    if (pathname === '/api/auth/reset-password') {
+      if (!validEmail(email)) throw fail('email');
+      emailLimit('reset-try:' + email);
+      const code = typeof data?.code === 'string' ? data.code.replace(/\s/g,'') : '';
+      const newPassword = data?.newPassword;
+      if (typeof newPassword !== 'string' || newPassword.length < 12 || newPassword.length > 128) throw fail('password');
+      await queued(async () => {
+        const filename = path.join(storage, hash(email) + '.json');
+        let account;
+        try { account = JSON.parse(await fs.readFile(filename, 'utf8')); }
+        catch (error) { if (error.code !== 'ENOENT') throw error; }
+        if (account?.signInBlocked) throw fail('signInBlocked', 403);
+        if (!account || !codeValid(account.passwordReset, code, email)) throw fail('code');
+        delete account.passwordReset;
+        account.salt = crypto.randomBytes(16).toString('hex');
+        account.passwordHash = (await scrypt(newPassword, account.salt, 64)).toString('hex');
+        account.updatedAt = new Date().toISOString();
+        await atomicWrite(filename, account);
+        revokeSessions(account.id);
+        limit.count--;
+        json(res, 200, { user:issueSession(req, res, account) });
+      });
+      return true;
+    }
     const password = data?.password;
-    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || typeof password !== 'string' || !password.length || password.length > 128) throw fail('request');
+    if (!validEmail(email) || typeof password !== 'string' || !password.length || password.length > 128) throw fail('request');
     await queued(async () => {
     const actor = session(req)?.user;
     if (actor?.role === 'admin' && (pathname.endsWith('/register') || email !== actor.email)) throw fail('userAccountRequired',403);

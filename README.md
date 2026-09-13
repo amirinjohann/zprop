@@ -9,7 +9,7 @@ npm install
 npm start
 ```
 
-Open **http://localhost:4173**. On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`. Copy `.env.example` to `.env` for SMTP if users should be able to change their email; `npm start` loads that file when present. Playwright tests do not read `.env`.
+Open **http://localhost:4173**. On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`. Copy `.env.example` to `.env` for SMTP so users can reset a password or change their email; `npm start` loads that file when present. Playwright tests do not read `.env`.
 
 Sign-in and all tools require the Node server. Open http://localhost:4173. Serving files directly through Laragon/Apache does not enforce server authentication; route the app through this server and keep private storage outside any separate static web root.
 
@@ -21,7 +21,7 @@ Open `sign-in.html` and choose **Create account** with an email address and a pa
 
 Accounts persist in the private `.accounts/` directory with salted scrypt password hashes. Random session tokens use HTTP-only, SameSite cookies and expire after seven days. Sessions are held in memory, so restarting the server requires signing in again. Authentication requests have origin checks and a limit of 30 unsuccessful attempts per IP per 15 minutes.
 
-Changing a profile email sends a 6-digit code to the **new** address. The change completes only after that code is entered, along with the current password. Set `SMTP_HOST`, `SMTP_FROM`, and usually `SMTP_PORT`, `SMTP_USER` and `SMTP_PASS` on the host. Never commit SMTP passwords or log the codes. Without SMTP, sign-in still works; email changes are rejected until mail is configured.
+Forgot password and changing a profile email both send a 6-digit code. Reset completes after that code and a new 12–128 character password; an email change also needs the current password. Set `SMTP_HOST`, `SMTP_FROM`, and usually `SMTP_PORT`, `SMTP_USER` and `SMTP_PASS` on the host. The local example sender is `zproptech@gmail.com` (`smtp.gmail.com`). Use a Gmail App Password, never the normal mailbox password. Never commit SMTP passwords or log the codes. Without SMTP, sign-in still works; reset and email changes are rejected until mail is configured.
 
 Keep one Node process: sessions and the item-creation queue are in memory.
 
@@ -37,7 +37,7 @@ The public domain is configured in `js/public-origin.js`. The publishing forms, 
 4. Configure the proxy to accept uploads up to 256 MiB and allow enough time for uploads and ZIP extraction. Keep `.accounts/`, `.generated-sites/` and `.short-links/` on persistent private storage across deployments, with backups. Use one Node process with the current in-memory session implementation.
 5. Verify account creation, site publishing and opening a shared site while signed out through the public HTTPS domain. DNS and hosting must be connected before public links resolve to this app.
 
-Serve the app through Node, including `/sites/` and all APIs, rather than uploading only the HTML files to a static host. Existing saved sites and links use the same paths after migration. Set SMTP on the host so members can confirm an email change with a code; per-user storage quotas remain a separate feature.
+Serve the app through Node, including `/sites/` and all APIs, rather than uploading only the HTML files to a static host. Existing saved sites and links use the same paths after migration. Set SMTP on the host so members can reset a password or confirm an email change with a code; per-user storage quotas remain a separate feature.
 
 ## Static sites
 

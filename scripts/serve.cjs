@@ -7,7 +7,9 @@ if (process.env.NODE_ENV !== 'test') {
     for (const line of fs.readFileSync(path.join(root, '.env'), 'utf8').split(/\r?\n/)) {
       const match = line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)\s*$/);
       if (!match || process.env[match[1]] !== undefined) continue;
-      process.env[match[1]] = match[2].replace(/^["']|["']$/g, '');
+      let value = match[2].replace(/^["']|["']$/g, '');
+      if (match[1] === 'SMTP_PASS') value = value.replace(/\s+/g, '');
+      process.env[match[1]] = value;
     }
   } catch (error) { if (error.code !== 'ENOENT') throw error; }
 }
@@ -197,7 +199,7 @@ const server = http.createServer(async (req, res) => {
     if (error) { res.writeHead(404).end('Not found'); return; }
     const ext = path.extname(file).toLowerCase();
     if (ext === '.html') {
-      data = data.toString('utf8').replace(/auth\.js"/g, 'auth.js?v=2"');
+      data = data.toString('utf8').replace(/auth\.js"/g, 'auth.js?v=4"');
       if (protectedPage) {
         // The tool document already passed the session gate. Reuse that result
         // for its first render instead of making the editor wait for another GET.

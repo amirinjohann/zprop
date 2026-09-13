@@ -33,6 +33,7 @@ html .sign-in-page #sign-in-form input:focus{border-color:var(--gold);box-shadow
 html .sign-in-page #sign-in-form input[aria-invalid=true]{border-color:#be5860}
 html .sign-in-page #sign-in-form input:disabled{opacity:.55;cursor:not-allowed}
 html .sign-in-page .password-label{gap:10px;margin-top:22px;align-items:baseline}
+html .sign-in-page #reset-code-group input{letter-spacing:.2em}
 html .sign-in-page #forgot-password{font-size:10px;font-weight:500;color:var(--gold);padding:3px 0 8px;white-space:nowrap}
 html .sign-in-page #forgot-password:hover{text-decoration:underline;text-underline-offset:3px}
 html .sign-in-page #toggle-password{width:41px;height:41px;right:4px;top:4px;border-radius:7px;color:var(--muted);transition:background .18s,color .18s}
