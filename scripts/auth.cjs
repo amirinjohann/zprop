@@ -88,8 +88,8 @@ async function initialize() {
     // An administrator can change their login email without recreating the seed account.
     if (!(await readUsers()).some(user => user.role === 'admin')) {
       const salt = crypto.randomBytes(16).toString('hex');
-      const password = process.env.ADMIN_PASSWORD || 'admin1234567';
-      if (password.length < 12 || password.length > 128) throw new Error('ADMIN_PASSWORD must contain 12-128 characters.');
+      const password = process.env.ADMIN_PASSWORD || '';
+      if (password.length < 12 || password.length > 128) throw new Error('Set ADMIN_PASSWORD in .env to create the first administrator (12-128 characters).');
       const account = { id:crypto.randomUUID(), email:adminEmail, salt, passwordHash:(await scrypt(password, salt, 64)).toString('hex'), role:'admin', createdAt:new Date().toISOString() };
       await fs.writeFile(filename, JSON.stringify(account), { flag:'wx', mode:0o600 });
     }

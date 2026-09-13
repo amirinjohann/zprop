@@ -14,6 +14,7 @@ module.exports = defineConfig({
   webServer: {
     command: 'node scripts/serve.cjs', url:baseURL, reuseExistingServer:false,
     env: { PORT:'4174', HOST:'127.0.0.1', NODE_ENV:'test', AUTH_ORIGIN:'', AUTH_SECURE_COOKIE:'0',
+      ADMIN_PASSWORD:'test-admin-password-123',
       ZPROP_ACCOUNTS_DIR:process.env.ZPROP_ACCOUNTS_DIR, ZPROP_ADMIN_DIR:path.join(testStorage,'admin'),
       ZPROP_DATA_DIR:process.env.ZPROP_DATA_DIR, ZPROP_MAIL_DIR:process.env.ZPROP_MAIL_DIR }
   },
