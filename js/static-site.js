@@ -9,7 +9,7 @@
     editor:['Cipta laman statik','Create a static site'], upload:['Muat naik fail','Upload a file'], paste:['Tampal HTML','Paste HTML'], file:['Fail HTML atau ZIP','HTML or ZIP file'],
     limit:['.html, .zip dibenarkan. Maksimum 256 MB.','Supports .html and .zip. 256 MB maximum.'], types:['Fail dalam ZIP:','Files allowed inside a ZIP:'], index:['ZIP mesti mengandungi index.html. Satu folder pembungkus juga diterima.','Your ZIP must contain index.html. A single enclosing folder is also supported.'], relative:['Gunakan laluan relatif untuk imej, CSS dan JavaScript, contohnya:','Use relative paths for images, CSS and JavaScript, for example:'],
     html:['Kod HTML','HTML code'], slug:['URL ringkas','Short URL'], random:['Biarkan kosong untuk nama rawak. Gunakan 3–50 huruf kecil, nombor atau sempang.','Leave empty for a random name. Use 3–50 lowercase letters, numbers or hyphens.'],
-    create:['Cipta laman statik','Create static site'], creating:['Sedang mencipta laman…','Creating your site…'], preview:['Pratonton','Preview'], generate:['Jana pratonton','Generate preview'], downloadHtml:['Muat turun HTML','Download HTML'],
+    create:['Cipta laman statik','Create static site'], update:['Kemas kini laman statik','Update static site'], creating:['Sedang mencipta laman…','Creating your site…'], updating:['Sedang mengemas kini laman…','Updating your site…'], updated:['Laman statik dikemas kini.','Static site updated.'], preview:['Pratonton','Preview'], generate:['Jana pratonton','Generate preview'], downloadHtml:['Muat turun HTML','Download HTML'],
     emptyPreview:['Laman anda bermula di sini.','Your site starts here.'], previewHelp:['Muat naik laman web atau tampal HTML, kemudian cipta laman anda untuk melihat hasilnya.','Upload your website or paste HTML, then create your site to see it here.'],
     ready:['Laman statik anda telah dicipta','Your static site is ready'], open:['Buka laman','Open site'], copy:['Salin pautan','Copy link'], copied:['Pautan disalin.','Link copied.'], copyFail:['Pilih dan salin pautan di atas.','Select and copy the link above.'],
     note:['Terbitkan laman anda di zprop.tech dan kongsi pautannya.','Publish your site on zprop.tech and share its link.'], selected:['Fail dipilih','File selected'],
@@ -20,9 +20,11 @@
     unavailable:['Alamat ini tidak menyediakan perkhidmatan muat naik. Buka alatan pada pelayan ZPROP untuk mencipta laman.','This address does not provide the upload service. Open the tool on the ZPROP server to create your site.'],
     network:['Tidak dapat menghubungi perkhidmatan muat naik. Semak sambungan anda dan cuba lagi.','Could not reach the upload service. Check your connection and try again.'],
     server:['Pelayan tidak dapat menyimpan laman anda. Cuba lagi atau hubungi pentadbir pelayan.','The server could not save your site. Try again or contact the server administrator.'],
-    openService:['Buka halaman muat naik ZPROP','Open the ZPROP upload page']
+    openService:['Buka halaman muat naik ZPROP','Open the ZPROP upload page'],
+    editTitle:['Edit laman statik','Edit static site'], locked:['Nama URL dikunci supaya pautan yang diterbitkan kekal sama.','The URL name is locked so the published link stays the same.'],
+    conflict:['Laman telah berubah. Buka semula sebelum menyimpan.','This site changed elsewhere. Reopen it before saving.'], notFound:['Laman ini tidak lagi tersedia.','This site is no longer available.']
   });
-  let mode = 'upload', busy = false, statusKey = '', siteUrl = '';
+  let mode = 'upload', busy = false, statusKey = '', siteUrl = '', library;
   let language = document.documentElement.lang === 'en' ? 1 : 0;
   const t = key => copy[key][language];
   const text = key => `<span data-static-copy="${key}">${t(key)}</span>`;
@@ -38,7 +40,7 @@
     <div id="upload-panel" role="tabpanel" aria-labelledby="upload-tab"><label class="site-upload"><span data-static-copy="file">${t('file')}</span><input name="file" type="file" accept=".html,.zip" aria-describedby="file-limit"></label><p class="site-hint" id="file-limit">${text('limit')}</p><p class="site-hint">${text('types')} .css, .js, .html, .jpg, .jpeg, .png, .ico, .svg, .gif, .webp, .ttf, .woff, .woff2, .eot, .otf, .xml, .json, .mp3, .wav, .mp4, .webm, .pdf, .txt, .avif</p><p class="site-hint">${text('index')}</p><p class="site-hint">${text('relative')} <code>&lt;link rel="stylesheet" href="./css/styles.css"&gt;</code></p></div>
     <div id="paste-panel" role="tabpanel" aria-labelledby="paste-tab" hidden><label>${text('html')}<textarea name="html" class="code-input" spellcheck="false" placeholder="<!DOCTYPE html>&#10;<html>&#10;  <body>&#10;    <h1>Hello, world!</h1>&#10;  </body>&#10;</html>"></textarea></label><div class="tool-actions secondary-actions"><button type="button" data-action="generate">${text('generate')}</button><button type="button" data-action="downloadHtml">${text('downloadHtml')}</button></div></div>
     <label class="slug-label">${text('slug')}<div class="site-address"><span id="site-prefix"></span><input name="slug" autocomplete="off" placeholder="my-website" maxlength="50" pattern="[a-z0-9][a-z0-9-]{1,48}[a-z0-9]" aria-describedby="slug-hint"></div></label><p class="site-hint" id="slug-hint">${text('random')}</p>
-    <p class="site-storage-note">${text('note')}</p><div class="tool-actions"><button type="submit" class="primary site-create" id="create-site">${text('create')} <span aria-hidden="true">↗</span></button></div><p id="tool-status" class="tool-status" role="status" aria-live="polite"></p>
+    <p class="site-storage-note">${text('note')}</p><div class="tool-actions"><button type="submit" class="primary site-create" id="create-site"><span data-static-copy="create">${t('create')}</span> <span aria-hidden="true">↗</span></button></div><p id="tool-status" class="tool-status" role="status" aria-live="polite"></p>
     <section class="site-result" id="site-result" hidden><h3>${text('ready')}</h3><a id="site-url" target="_blank" rel="noopener noreferrer"></a><div class="tool-actions"><a id="open-site" target="_blank" rel="noopener noreferrer">${text('open')} ↗</a><button type="button" id="copy-site">${text('copy')}</button></div></section>
     </form><section class="tool-preview site-preview"><div class="preview-toolbar"><h2 class="workspace-title">${text('preview')}</h2><span class="preview-dots" aria-hidden="true">● ● ●</span></div><div id="preview-empty" class="site-preview-empty"><span class="preview-code" aria-hidden="true">&lt;/&gt;</span><h3>${text('emptyPreview')}</h3><p>${text('previewHelp')}</p></div><iframe class="html-preview" id="html-preview" sandbox="" title="HTML preview" referrerpolicy="no-referrer" hidden></iframe></section></div>`;
   const form = $('#tool-form');
@@ -86,13 +88,17 @@
     if (body.size > 256*1024*1024) return status('size', true);
     if (mode === 'upload' && !/\.(html|zip)$/i.test(file.name)) return status('fileType', true);
     const type = mode === 'upload' && /\.zip$/i.test(file.name) ? 'zip' : 'html';
-    const endpoint = new URL('api/static-sites', base); endpoint.searchParams.set('type', type); endpoint.searchParams.set('slug', form.elements.slug.value.trim());
-    busy = true; for(const control of form.querySelectorAll('input,textarea,button'))control.disabled=true; form.setAttribute('aria-busy', 'true'); $('#create-site').disabled = true; $('#create-site').firstElementChild.textContent = t('creating'); status(''); $('#site-result').hidden = true;
+    const editing = !!library.active;
+    const endpoint = new URL(editing ? 'api/static-sites/' + encodeURIComponent(library.active.slug) : 'api/static-sites', base);
+    endpoint.searchParams.set('type', type);
+    if (editing) endpoint.searchParams.set('revision', library.active.revision);
+    else endpoint.searchParams.set('slug', form.elements.slug.value.trim());
+    busy = true; for(const control of form.querySelectorAll('input,textarea,button'))control.disabled=true; form.setAttribute('aria-busy', 'true'); $('#create-site').disabled = true; syncSave(editing); status(''); $('#site-result').hidden = true;
     try {
       let response;
-      try { response = await window.ZpropAuth.fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/octet-stream'}, body }); }
+      try { response = await window.ZpropAuth.fetch(endpoint, { method:editing?'PUT':'POST', headers:{'Content-Type':'application/octet-stream'}, body }); }
       catch { throw new Error(location.protocol === 'file:' ? 'unavailable' : 'network'); }
-      if ([404, 405].includes(response.status)) throw new Error('unavailable');
+      if ([404, 405].includes(response.status)) throw new Error(editing && response.status===404 ? 'notFound' : 'unavailable');
       if (response.status === 413) throw new Error('size');
       let result; try { result = await response.json(); } catch { throw new Error(response.ok ? 'unavailable' : 'server'); }
       if (!response.ok) throw new Error(result.error === 'slug' ? 'slugError' : result.error);
@@ -100,11 +106,33 @@
       siteUrl = new URL(result.url, publicBase).href;
       $('#site-url').href = siteUrl; $('#site-url').textContent = siteUrl; $('#open-site').href = siteUrl; $('#site-result').hidden = false;
       showPreview(); $('#html-preview').removeAttribute('srcdoc'); $('#html-preview').setAttribute('sandbox', 'allow-scripts'); $('#html-preview').src = new URL(result.url, base).href;
-      status('ready');library.saved();
+      status(editing?'updated':'ready');library.saved(editing?result:undefined);
     } catch (error) { status(copy[error.message] ? error.message : 'server', true); }
-    finally { busy = false; for(const control of form.querySelectorAll('input,textarea,button'))control.disabled=false; form.removeAttribute('aria-busy'); $('#create-site').disabled = false; $('#create-site').firstElementChild.textContent = t('create'); }
+    finally { busy = false; for(const control of form.querySelectorAll('input,textarea,button'))control.disabled=false; form.removeAttribute('aria-busy'); $('#create-site').disabled = false; syncSave(); }
   });
   $('#copy-site').addEventListener('click', async () => { try { await navigator.clipboard.writeText(siteUrl); status('copied'); } catch { status('copyFail'); } });
+  function syncSave(editing = !!library?.active) {
+    const key = busy ? (editing ? 'updating' : 'creating') : (editing ? 'update' : 'create');
+    const label = $('#create-site')?.firstElementChild;
+    if (label) { label.dataset.staticCopy = key; label.textContent = t(key); }
+    const title = $('#tool-form > .workspace-title');
+    if (title) { title.dataset.staticCopy = editing ? 'editTitle' : 'editor'; title.textContent = t(title.dataset.staticCopy); }
+    if (form?.elements.slug) form.elements.slug.readOnly = !!editing;
+    const hint = $('#slug-hint');
+    if (hint) { hint.dataset.staticCopy = editing ? 'locked' : 'random'; hint.textContent = t(hint.dataset.staticCopy); }
+  }
+  function showPublished(record) {
+    siteUrl = new URL(record.url, publicBase).href;
+    $('#site-url').href = siteUrl; $('#site-url').textContent = siteUrl; $('#open-site').href = siteUrl; $('#site-result').hidden = false;
+    showPreview();
+    if (record.html) {
+      $('#html-preview').removeAttribute('src'); $('#html-preview').setAttribute('sandbox', '');
+      $('#html-preview').srcdoc = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'">` + record.html;
+    } else {
+      $('#html-preview').removeAttribute('srcdoc'); $('#html-preview').setAttribute('sandbox', 'allow-scripts');
+      $('#html-preview').src = new URL(record.url, base).href;
+    }
+  }
   function localizeShell() {
     language = document.documentElement.lang === 'en' ? 1 : 0;
     document.title = tool.name[language] + ' — ZPROP';
@@ -116,16 +144,22 @@
   }
   function localize() {
     localizeShell();
-    if (busy) $('#create-site').firstElementChild.textContent = t('creating');
+    syncSave();
     if (statusKey) $('#tool-status').textContent = t(statusKey);
     updateServiceLink();
     $('#html-preview').title = language ? 'HTML preview' : 'Pratonton HTML';
   }
   document.addEventListener('zprop:language', localize); localize();
-  const library=window.ZpropItemLibrary.mount({category:'host-html',onCreate(){
-    form.reset();form.elements.slug.setCustomValidity('');switchMode('upload');status('');siteUrl='';
+  library=window.ZpropItemLibrary.mount({category:'host-html',onCreate(){
+    form.reset();form.elements.slug.setCustomValidity('');form.elements.slug.readOnly=false;switchMode('upload');status('');siteUrl='';
     $('#site-result').hidden=true;$('#html-preview').hidden=true;$('#preview-empty').hidden=false;
     $('#html-preview').removeAttribute('src');$('#html-preview').removeAttribute('srcdoc');$('#html-preview').setAttribute('sandbox','');
+    syncSave(false);
+  },onEdit(record){
+    form.reset();form.elements.slug.setCustomValidity('');form.elements.slug.value=record.slug;form.elements.slug.readOnly=true;
+    if (record.html) { switchMode('paste'); form.elements.html.value = record.html; }
+    else { switchMode('upload'); form.elements.html.value = ''; }
+    showPublished(record);status('');syncSave(true);
   }});
   window.ZpropNavigation?.ready();
 })();

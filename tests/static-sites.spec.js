@@ -79,6 +79,32 @@ test('HTML uploads, empty inputs and unavailable backend have clear outcomes', a
   await expect(page.locator('#create-site')).toBeEnabled();
 });
 
+test('library edit reopens HTML and replaces the published site',async({page,request,browser,baseURL})=>{
+  const slug=unique();
+  expect((await request.post('/api/static-sites?type=html&slug='+slug,{data:'<h1>Original site</h1>'})).status()).toBe(201);
+  const meta=await (await request.get('/api/static-sites/'+slug)).json();
+  expect(meta.html).toContain('Original site');expect(meta.revision).toBe(1);
+  expect((await request.put('/api/static-sites/'+slug+'?type=html&revision=0',{data:'<h1>Nope</h1>'})).status()).toBe(409);
+  expect((await request.put('/api/static-sites/'+slug+'?type=html&revision=1',{data:'<h1>Nope</h1>',headers:{Origin:'null'}})).status()).toBe(403);
+  const other=await browser.newContext();
+  try{
+    await other.request.post(baseURL+'/api/auth/register',{data:{email:unique()+'@example.com',password:'Test-password-123!'}});
+    for(const method of ['get','put'])expect((await other.request[method](baseURL+'/api/static-sites/'+slug,{data:'<h1>Nope</h1>'})).status()).toBe(404);
+  }finally{await other.close();}
+  await page.goto('/tools/host-html.html?lang=en');
+  const card=page.locator('[data-item-id="'+slug+'"]');
+  await expect(card.locator('[data-item-action=edit]')).toBeVisible();
+  await card.locator('[data-item-action=edit]').click();
+  await expect(page.locator('[name=html]')).toHaveValue('<h1>Original site</h1>');
+  await expect(page.locator('[name=slug]')).toHaveJSProperty('readOnly',true);
+  await expect(page.locator('#create-site')).toContainText('Update static site');
+  await page.locator('[name=html]').fill('<h1>Edited site</h1>');
+  await page.locator('#create-site').click();
+  await expect(page.locator('#tool-status')).toContainText('updated');
+  expect(await (await request.get('/'+slug+'/')).text()).toContain('Edited site');
+  expect((await (await request.get('/api/static-sites/'+slug)).json()).revision).toBe(2);
+});
+
 test('server rejects invalid ZIPs, unsafe paths, active backend files and conflicting names', async ({request}) => {
   const fixtures = [
     [Buffer.from('broken zip'), 'invalidZip'],

@@ -20,7 +20,7 @@ test('all three libraries start empty with matching Create actions and bilingual
   expect(errors).toEqual([]);
 });
 
-test('file and static libraries list existing items, copy, download, and confirm deletion',async({page,request})=>{
+test('file and static libraries list existing items, copy, edit, and confirm deletion',async({page,request})=>{
   const file=unique(),site=unique(),bytes=Buffer.from('%PDF-1.4\nLibrary file');
   expect((await request.post('/api/file-links?name=report.pdf&slug='+file,{data:bytes})).status()).toBe(201);
   expect((await request.post('/api/static-sites?type=html&slug='+site,{data:'<h1>Saved website</h1>'})).status()).toBe(201);
@@ -28,10 +28,15 @@ test('file and static libraries list existing items, copy, download, and confirm
     await page.goto('/tools/'+category+'.html?lang=en');
     const card=page.locator('[data-item-id="'+id+'"]');await expect(card).toBeVisible();
     await expect(page.locator('[data-item-id]')).toHaveCount(1);
+    await expect(card.locator('[data-item-action=edit]')).toBeVisible();
+    await expect(card.locator('[data-item-action=download]')).toHaveCount(0);
     await page.evaluate(()=>{navigator.clipboard.writeText=async text=>window.copiedItem=text;});
     await card.locator('[data-item-action=copy]').click();expect(new URL(await page.evaluate(()=>window.copiedItem)).pathname).toBe(url);
-    if(category==='transfer-files'){const downloaded=page.waitForEvent('download');await card.locator('[data-item-action=download]').click();expect(await fs.readFile(await (await downloaded).path())).toEqual(bytes);}
-    else{const popupPromise=page.waitForEvent('popup');await card.locator('[data-item-action=open]').click();const popup=await popupPromise;await expect(popup.locator('h1')).toHaveText('Saved website');await popup.close();}
+    await card.locator('[data-item-action=edit]').click();await expect(page.locator('#tool-form')).toBeVisible();
+    await expect(page.locator('[name=slug]')).toHaveValue(id);
+    await expect(page.locator('[name=slug]')).toHaveJSProperty('readOnly',true);
+    await page.locator('#back-item-library').click();await expect(card).toBeVisible();
+    if(category==='host-html'){const popupPromise=page.waitForEvent('popup');await card.locator('[data-item-action=open]').click();const popup=await popupPromise;await expect(popup.locator('h1')).toHaveText('Saved website');await popup.close();}
     await card.locator('[data-item-action=delete]').click();await page.locator('#cancel-delete-item').click();await expect(card).toBeVisible();
     await card.locator('[data-item-action=delete]').click();await page.locator('#confirm-delete-item').click();
     await expect(page.locator('.short-library-empty')).toBeVisible();expect((await request.get(url)).status()).toBe(404);

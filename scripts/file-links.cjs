@@ -1,12 +1,14 @@
 const fs = require('node:fs/promises');
 const { createReadStream } = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { unzipSync } = require('fflate');
 const links = require('./short-links.cjs');
 const { assertRoom, created } = require('./item-limit.cjs');
 const MAX_BYTES = 50 * 1024 * 1024;
 const fail = (code, status = 400) => Object.assign(new Error(code), { status });
 const types = { '.pdf':'application/pdf', '.xls':'application/vnd.ms-excel', '.xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+const view = record => ({ id:record.slug, slug:record.slug, filename:record.filename, mime:record.mime, size:record.size, url:`/${record.slug}`, revision:record.revision||1, updatedAt:record.updatedAt||null });
 
 async function validate(file, extension) {
   const handle = await fs.open(file, 'r');
@@ -28,18 +30,20 @@ async function validate(file, extension) {
   throw fail('fileInvalid');
 }
 
-async function create(req, url, ownerId) {
+function filenameOf(url) {
   const filename = url.searchParams.get('name') || '';
   const extension = path.extname(filename).toLowerCase();
   if (!types[extension]) throw fail('fileType');
   if (filename.length > 180 || /[\x00-\x1f\x7f/\\]/.test(filename)) throw fail('fileName');
+  return { filename, extension };
+}
+
+async function receive(req, directory, extension) {
   if (Number(req.headers['content-length']) > MAX_BYTES) throw fail('fileSize', 413);
-  await assertRoom(ownerId, 'transfer-files');
-  const claim = await links.reserve(url.searchParams.get('slug') || '');
-  const file = path.join(claim.target, 'file.bin');
+  const temp = path.join(directory, 'file-'+crypto.randomUUID()+'.tmp');
   let size = 0;
   try {
-    const handle = await fs.open(file, 'wx');
+    const handle = await fs.open(temp, 'wx');
     try {
       for await (const chunk of req) {
         size += chunk.length;
@@ -48,13 +52,61 @@ async function create(req, url, ownerId) {
       }
     } finally { await handle.close(); }
     if (!size) throw fail('fileEmpty');
-    await validate(file, extension);
-    const record = { kind:'file', slug:claim.slug, filename, mime:types[extension], size };
-    // Publish only after the complete upload has been checked.
-    await fs.writeFile(path.join(claim.target, 'link.json'), JSON.stringify({ ...record, ownerId }), { flag:'wx' });
+    await validate(temp, extension);
+    await fs.rename(temp, path.join(directory, 'file.bin'));
+    return size;
+  } catch (error) {
+    await fs.rm(temp, { force:true });
+    throw error;
+  }
+}
+
+async function writeLink(directory, record) {
+  const temp = path.join(directory, 'link-'+crypto.randomUUID()+'.tmp');
+  try {
+    await fs.writeFile(temp, JSON.stringify(record), { flag:'wx' });
+    await fs.rename(temp, path.join(directory, 'link.json'));
+  } finally { await fs.rm(temp, { force:true }); }
+}
+
+async function owned(slug, ownerId) {
+  let record;
+  try { record = await links.read(slug); }
+  catch (error) { if (error.code === 'ENOENT' || error.status === 404) throw fail('notFound', 404); throw error; }
+  if (record.ownerId !== ownerId || record.kind !== 'file') throw fail('notFound', 404);
+  return record;
+}
+
+async function create(req, url, ownerId) {
+  const { filename, extension } = filenameOf(url);
+  await assertRoom(ownerId, 'transfer-files');
+  const claim = await links.reserve(url.searchParams.get('slug') || '');
+  try {
+    const size = await receive(req, claim.target, extension);
+    const now = new Date().toISOString();
+    const record = { kind:'file', slug:claim.slug, filename, mime:types[extension], size, ownerId, revision:1, createdAt:now, updatedAt:now };
+    await writeLink(claim.target, record);
     created(ownerId, 'transfer-files');
-    return { ...record, url:`/${claim.slug}` };
+    return view(record);
   } catch (error) { await links.release(claim.target); throw error; }
+}
+
+async function update(req, url, slug, ownerId) {
+  const previous = await owned(slug, ownerId);
+  if (Number(url.searchParams.get('revision')) !== (previous.revision || 1)) throw fail('conflict', 409);
+  const { filename, extension } = filenameOf(url);
+  const size = await receive(req, links.directory(slug), extension);
+  const record = { ...previous, filename, mime:types[extension], size, revision:(previous.revision||1)+1, updatedAt:new Date().toISOString() };
+  await writeLink(links.directory(slug), record);
+  return view(record);
+}
+
+async function handle(req, slug, ownerId) {
+  const url = new URL(req.url, 'http://localhost');
+  if (req.method === 'GET' && slug) return view(await owned(slug, ownerId));
+  if (req.method === 'POST' && !slug) return create(req, url, ownerId);
+  if (req.method === 'PUT' && slug) return update(req, url, slug, ownerId);
+  throw fail('method', 405);
 }
 
 async function serve(req, res, record) {
@@ -86,4 +138,4 @@ async function serve(req, res, record) {
   res.on('close', () => stream.destroy());
   stream.pipe(res);
 }
-module.exports = { create, serve };
+module.exports = { create, handle, serve };

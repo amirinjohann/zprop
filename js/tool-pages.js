@@ -21,7 +21,7 @@
   copy.linkHint[0]+=' Nama mesti unik untuk semua pengguna. Huruf besar dan kecil dianggap sama.';
   copy.linkHint[1]+=' Names must be unique across all users. Uppercase and lowercase count as the same name.';
   Object.assign(copy, {
-    fileChoose:['Pilih PDF atau Excel','Choose a PDF or Excel file'], fileHelp:['PDF, XLS atau XLSX. Maksimum 50 MB. Satu fail bagi setiap pautan.','PDF, XLS or XLSX. 50 MB maximum. One file per link.'], createFileLink:['Cipta pautan fail','Create file link'], fileCreating:['Sedang memuat naik fail…','Uploading your file…'], fileReady:['PAUTAN FAIL DICIPTA','FILE LINK CREATED'], filePreview:['Pautan fail anda akan dipaparkan di sini selepas muat naik.','Your file link will appear here after upload.'], fileType:['Pilih fail PDF, XLS atau XLSX.','Choose a PDF, XLS or XLSX file.'], fileSize:['Fail mesti berukuran 50 MB atau kurang.','Your file must be 50 MB or less.'], fileEmpty:['Pilih fail yang tidak kosong dahulu.','Choose a non-empty file first.'], fileInvalid:['Kandungan fail tidak sepadan dengan PDF atau Excel yang sah. Eksport semula fail dan cuba lagi.','The file contents do not match a supported PDF or Excel format. Export the file again and retry.'], fileName:['Nama fail tidak disokong. Namakan semula fail dan cuba lagi.','This filename is not supported. Rename the file and try again.'], fileUnavailable:['Perkhidmatan muat naik tidak tersedia buat masa ini. Sila cuba lagi.','The upload service is unavailable right now. Please try again.'], fileServer:['Pelayan tidak dapat menyimpan fail anda. Cuba lagi.','The server could not save your file. Please try again.'], fileOpen:['Buka fail','Open file'], fileDownload:['Muat turun fail','Download file'], fileBehavior:['PDF dibuka dalam pelayar yang menyokongnya. Fail Excel dimuat turun untuk dibuka dalam aplikasi hamparan.','PDFs open in supported browsers. Excel files download to open in a spreadsheet app.'], fileBusy:['Pelayan sedang sibuk. Cuba lagi sebentar.','The server is busy. Please try again shortly.']
+    fileChoose:['Pilih PDF atau Excel','Choose a PDF or Excel file'], fileHelp:['PDF, XLS atau XLSX. Maksimum 50 MB. Satu fail bagi setiap pautan.','PDF, XLS or XLSX. 50 MB maximum. One file per link.'], fileReplace:['Pilih fail baharu untuk menggantikan fail yang diterbitkan. PDF, XLS atau XLSX. Maksimum 50 MB.','Choose a new file to replace the published one. PDF, XLS or XLSX. 50 MB maximum.'], createFileLink:['Cipta pautan fail','Create file link'], updateFileLink:['Kemas kini pautan fail','Update file link'], fileCreating:['Sedang memuat naik fail…','Uploading your file…'], fileUpdating:['Sedang mengemas kini fail…','Updating your file…'], fileReady:['PAUTAN FAIL DICIPTA','FILE LINK CREATED'], fileUpdated:['PAUTAN FAIL DIKEMAS KINI','FILE LINK UPDATED'], filePreview:['Pautan fail anda akan dipaparkan di sini selepas muat naik.','Your file link will appear here after upload.'], fileType:['Pilih fail PDF, XLS atau XLSX.','Choose a PDF, XLS or XLSX file.'], fileSize:['Fail mesti berukuran 50 MB atau kurang.','Your file must be 50 MB or less.'], fileEmpty:['Pilih fail yang tidak kosong dahulu.','Choose a non-empty file first.'], fileInvalid:['Kandungan fail tidak sepadan dengan PDF atau Excel yang sah. Eksport semula fail dan cuba lagi.','The file contents do not match a supported PDF or Excel format. Export the file again and retry.'], fileName:['Nama fail tidak disokong. Namakan semula fail dan cuba lagi.','This filename is not supported. Rename the file and try again.'], fileUnavailable:['Perkhidmatan muat naik tidak tersedia buat masa ini. Sila cuba lagi.','The upload service is unavailable right now. Please try again.'], fileServer:['Pelayan tidak dapat menyimpan fail anda. Cuba lagi.','The server could not save your file. Please try again.'], fileOpen:['Buka fail','Open file'], fileDownload:['Muat turun fail','Download file'], fileBehavior:['PDF dibuka dalam pelayar yang menyokongnya. Fail Excel dimuat turun untuk dibuka dalam aplikasi hamparan.','PDFs open in supported browsers. Excel files download to open in a spreadsheet app.'],     fileBusy:['Pelayan sedang sibuk. Cuba lagi sebentar.','The server is busy. Please try again shortly.'], conflict:['Pautan fail telah berubah. Buka semula sebelum menyimpan.','This file link changed elsewhere. Reopen it before saving.'], notFound:['Pautan fail ini tidak lagi tersedia.','This file link is no longer available.']
   });
   localizeShell();
   window.ZpropLanguage?.ready();
@@ -34,7 +34,7 @@
   const action=(key,primary=false)=>`<button type="button" data-action="${key}" data-tool-copy="${key}" class="${primary?'primary':''}">${t(key)}</button>`;
   const val=name=>$('#tool-form').elements[name].value.trim();
   const input=name=>$('#tool-form').elements[name];
-  let lastStatus='',selectedFiles=[],library=null;
+  let lastStatus='',selectedFiles=[],library=null,syncFileAction=()=>{},showFileLink=()=>{};
   function status(key){lastStatus=key;$('#tool-status').textContent=key?t(key):'';}
   function valid(){return $('#tool-form').reportValidity();}
   function validUrl(value){try{const u=new URL(value);return ['http:','https:'].includes(u.protocol)&&!!u.hostname&&!u.username&&!u.password;}catch{return false;}}
@@ -55,31 +55,45 @@
     let uploading=false,fileUrl='';
     const resetResult=()=>{fileUrl='';$('#file-result').hidden=true;$('#file-empty').hidden=false;};
     const checkFile=file=>!file||!file.size?'fileEmpty':!/\.(pdf|xls|xlsx)$/i.test(file.name)?'fileType':file.size>50*1024*1024?'fileSize':'';
+    function showFile(result){
+      fileUrl=new URL(result.url,window.ZPROP_PUBLIC_ORIGIN).href;
+      $('#uploaded-file-name').textContent=result.filename;
+      $('#file-address').textContent=fileUrl;$('#file-address').href=fileUrl;$('#open-file').href=fileUrl;$('#download-file').href=fileUrl+'?download=1';
+      $('#file-result').hidden=false;$('#file-empty').hidden=true;
+    }
+    syncFileAction=function(editing=!!library?.active){
+      const key=editing?'updateFileLink':'createFileLink';
+      button.dataset.toolCopy=key;button.textContent=t(key);clear.hidden=!!editing;
+      $('#file-help').dataset.toolCopy=editing?'fileReplace':'fileHelp';$('#file-help').textContent=t($('#file-help').dataset.toolCopy);
+    };
+    showFileLink=showFile;
     async function createFileLink(){
       if(uploading)return;
       const file=input('files').files[0],error=checkFile(file);
       if(error){status(error);return;}
       if(!valid())return;
-      const endpoint=new URL('../api/file-links',location.href);endpoint.searchParams.set('name',file.name);endpoint.searchParams.set('slug',val('slug'));
-      uploading=true;resetResult();status('fileCreating');form.setAttribute('aria-busy','true');
+      const editing=!!library.active;
+      const endpoint=new URL(editing?'../api/file-links/'+encodeURIComponent(library.active.slug):'../api/file-links',location.href);
+      endpoint.searchParams.set('name',file.name);
+      if(editing)endpoint.searchParams.set('revision',library.active.revision);else endpoint.searchParams.set('slug',val('slug'));
+      uploading=true;resetResult();status(editing?'fileUpdating':'fileCreating');form.setAttribute('aria-busy','true');
       for(const control of [button,clear,input('files'),input('slug')])control.disabled=true;
       try{
-        let response;try{response=await window.ZpropAuth.fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});}catch{throw new Error('linkNetwork');}
-        if([404,405].includes(response.status))throw new Error('fileUnavailable');
+        let response;try{response=await window.ZpropAuth.fetch(endpoint,{method:editing?'PUT':'POST',headers:{'Content-Type':'application/octet-stream'},body:file});}catch{throw new Error('linkNetwork');}
+        if([404,405].includes(response.status))throw new Error(editing&&response.status===404?'notFound':'fileUnavailable');
         if(response.status===413)throw new Error('fileSize');
         if(response.status===429)throw new Error('fileBusy');
         let result;try{result=await response.json();}catch{throw new Error(response.ok?'fileUnavailable':'fileServer');}
-        if(!response.ok)throw new Error(result.error==='origin'?'linkOrigin':result.error||'fileServer');
+        if(!response.ok)throw new Error(result.error==='origin'?'linkOrigin':copy[result.error]?result.error:'fileServer');
         if(!/^\/[a-zA-Z0-9_-]{2,50}$/.test(result.url))throw new Error('fileServer');
-        fileUrl=new URL(result.url,window.ZPROP_PUBLIC_ORIGIN).href;
-        $('#uploaded-file-name').textContent=result.filename;
-        $('#file-address').textContent=fileUrl;$('#file-address').href=fileUrl;$('#open-file').href=fileUrl;$('#download-file').href=fileUrl+'?download=1';
-        $('#file-result').hidden=false;$('#file-empty').hidden=true;status('fileReady');library.saved();
+        showFile(result);status(editing?'fileUpdated':'fileReady');
+        const ready=$('#file-result .draft-label');ready.dataset.toolCopy=editing?'fileUpdated':'fileReady';ready.textContent=t(ready.dataset.toolCopy);
+        library.saved(editing?result:undefined);syncFileAction();
       }catch(error){status(copy[error.message]?error.message:'fileServer');}
       finally{uploading=false;form.removeAttribute('aria-busy');for(const control of [button,clear,input('files'),input('slug')])control.disabled=false;}
     }
     button.addEventListener('click',createFileLink);form.addEventListener('submit',createFileLink);
-    clear.addEventListener('click',()=>{if(uploading)return;form.reset();selectedFiles=[];fileList();resetResult();status('');library.saved(null);});
+    clear.addEventListener('click',()=>{if(uploading)return;form.reset();selectedFiles=[];input('slug').readOnly=false;fileList();resetResult();status('');library.saved(null);syncFileAction();});
     input('files').addEventListener('change',()=>{selectedFiles=[...input('files').files];fileList();resetResult();status(checkFile(selectedFiles[0]));});
     form.addEventListener('input',resetResult);
     $('#copy-file-link').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(fileUrl);status('linkCopied');}catch{status('linkCopyFailed');}});
@@ -112,7 +126,7 @@
     $('#copy-short-link').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(createdUrl);status('linkCopied');}catch{status('linkCopyFailed');}});
   }
   function bioMarkup(){return `<div class="bio-avatar">${esc(val('name').slice(0,1)||'Z')}</div><h3>${esc(val('name'))}</h3><p>${esc(val('bio'))}</p>${validUrl(val('url'))?`<a href="${esc(val('url'))}" target="_blank" rel="noopener noreferrer">${esc(val('label'))}</a>`:''}`;}
-  function fileList(){const file=selectedFiles[0];$('#file-summary').textContent=file?`${file.name} · ${(file.size/1024).toFixed(1)} KB`:t('noFiles');}
+  function fileList(){const file=selectedFiles[0];$('#file-summary').textContent=file?`${file.name} · ${(file.size/1024).toFixed(1)} KB`:library?.active?.filename||t('noFiles');}
   function updatePreview(){
     if(tool.id==='bio-pages')$('#bio-preview').innerHTML=bioMarkup();
     if(tool.id==='transfer-files')fileList();
@@ -165,7 +179,10 @@
   updatePreview();localize();
   if(['transfer-files','vcards'].includes(tool.id))library=window.ZpropItemLibrary.mount({category:tool.id,onCreate(){
     $('#tool-form').reset();selectedFiles=[];status('');
-    if(tool.id==='transfer-files'){fileList();$('#file-result').hidden=true;$('#file-empty').hidden=false;}
-  },onEdit(record){for(const key of ['name','company','phone','email'])input(key).value=record.state[key];status('');},onDownload(record){download(window.ZpropVcard.format(record.state),'zprop-contact.vcf','text/vcard;charset=utf-8');}});
+    if(tool.id==='transfer-files'){input('slug').readOnly=false;fileList();$('#file-result').hidden=true;$('#file-empty').hidden=false;syncFileAction(false);}
+  },onEdit(record){
+    if(tool.id==='vcards'){for(const key of ['name','company','phone','email'])input(key).value=record.state[key];status('');return;}
+    $('#tool-form').reset();selectedFiles=[];input('slug').value=record.slug;input('slug').readOnly=true;fileList();showFileLink(record);$('#file-summary').textContent=record.filename;status('');syncFileAction(true);
+  },onDownload(record){download(window.ZpropVcard.format(record.state),'zprop-contact.vcf','text/vcard;charset=utf-8');}});
   window.ZpropNavigation?.ready();
 })();

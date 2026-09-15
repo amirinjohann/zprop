@@ -60,13 +60,9 @@ if (!isMainThread) {
   async function claim(slug) {
     if (await links.isReserved(slug) || await links.takenByLink(slug)) throw fail('taken', 409);
   }
-  async function create(req, url, ownerId) {
-    const type = url.searchParams.get('type');
+  async function ingest(req, type) {
     if (!['html', 'zip'].includes(type)) throw fail('fileType');
-    const requested = url.searchParams.get('slug') || '';
-    if (requested && !/^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/.test(requested)) throw fail('slug');
     if (Number(req.headers['content-length']) > MAX_BYTES) throw fail('size', 413);
-    await assertRoom(ownerId, 'host-html');
     const chunks = []; let length = 0;
     for await (const chunk of req) {
       length += chunk.length;
@@ -74,33 +70,102 @@ if (!isMainThread) {
       chunks.push(chunk);
     }
     if (!length) throw fail('empty');
-    const files = await new Promise((resolve, reject) => {
+    return await new Promise((resolve, reject) => {
       const worker = new Worker(__filename, { workerData: { data: Buffer.concat(chunks), type }, resourceLimits: { maxOldGenerationSizeMb: 512 } });
       const timer = setTimeout(() => { worker.terminate(); reject(fail('processing')); }, 30000);
       worker.once('message', result => { clearTimeout(timer); result.error ? reject(fail(result.error, result.status)) : resolve(result.files); });
       worker.once('error', () => { clearTimeout(timer); reject(fail('processing')); });
       worker.once('exit', code => { if (code) { clearTimeout(timer); reject(fail('processing')); } });
     });
+  }
+  async function materialize(directory, files, site) {
+    for (const [name, bytes] of Object.entries(files)) {
+      const target = path.join(directory, name);
+      await fs.mkdir(path.dirname(target), { recursive: true });
+      await fs.writeFile(target, bytes, { flag: 'wx' });
+    }
+    await fs.writeFile(path.join(directory, '.site.json'), JSON.stringify(site), { flag:'wx' });
+    await fs.writeFile(path.join(directory, '.ready'), 'ready');
+  }
+  async function listPublicFiles(directory, prefix='') {
+    const names = [];
+    for (const entry of await fs.readdir(directory, { withFileTypes:true })) {
+      if (entry.name.startsWith('.')) continue;
+      const relative = prefix ? prefix + '/' + entry.name : entry.name;
+      if (entry.isDirectory()) names.push(...await listPublicFiles(path.join(directory, entry.name), relative));
+      else names.push(relative);
+    }
+    return names;
+  }
+  async function owned(slug, ownerId) {
+    if (!/^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/.test(slug)) throw fail('notFound', 404);
+    const directory = path.join(storage, slug);
+    let site;
+    try { site = JSON.parse(await fs.readFile(path.join(directory, '.site.json'), 'utf8')); }
+    catch (error) { if (error.code === 'ENOENT') throw fail('notFound', 404); throw error; }
+    if (site.ownerId !== ownerId) throw fail('notFound', 404);
+    try { await fs.access(path.join(directory, '.bio.json')); throw fail('notFound', 404); }
+    catch (error) { if (error.status) throw error; if (error.code !== 'ENOENT') throw error; }
+    try { await fs.access(path.join(directory, '.ready')); }
+    catch (error) { if (error.code === 'ENOENT') throw fail('notFound', 404); throw error; }
+    return { directory, site };
+  }
+  async function view(slug, ownerId) {
+    const { directory, site } = await owned(slug, ownerId);
+    const names = await listPublicFiles(directory);
+    const result = { id:slug, slug, url: publicUrl(slug), revision: site.revision || 1, updatedAt: site.updatedAt || null, files: names.length };
+    if (names.length === 1 && names[0] === 'index.html') {
+      const data = await fs.readFile(path.join(directory, 'index.html'));
+      if (data.length <= 1024 * 1024) result.html = data.toString('utf8');
+    }
+    return result;
+  }
+  async function create(req, url, ownerId) {
+    const requested = url.searchParams.get('slug') || '';
+    if (requested && !/^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/.test(requested)) throw fail('slug');
+    await assertRoom(ownerId, 'host-html');
+    const files = await ingest(req, url.searchParams.get('type'));
     await fs.mkdir(storage, { recursive: true });
     const slug = requested || crypto.randomBytes(8).toString('hex');
     await claim(slug);
     const directory = path.join(storage, slug);
     try { await fs.mkdir(directory); } catch (error) { if (error.code === 'EEXIST') throw fail('taken', 409); throw error; }
     try {
-      for (const [name, bytes] of Object.entries(files)) {
-        const target = path.join(directory, name);
-        await fs.mkdir(path.dirname(target), { recursive: true });
-        await fs.writeFile(target, bytes, { flag: 'wx' });
-      }
-      await fs.writeFile(path.join(directory, '.site.json'), JSON.stringify({ ownerId }), { flag:'wx' });
-      await fs.writeFile(path.join(directory, '.ready'), 'ready');
+      await materialize(directory, files, { ownerId, revision:1, updatedAt: new Date().toISOString() });
     } catch (error) {
       // Only this request's newly reserved directory can be removed.
       if (path.dirname(directory) === storage) await fs.rm(directory, { recursive: true, force: true });
       throw error;
     }
     created(ownerId, 'host-html');
-    return { slug, url: publicUrl(slug), files: Object.keys(files).length };
+    return { id:slug, slug, url: publicUrl(slug), files: Object.keys(files).length, revision:1 };
+  }
+  async function update(req, url, slug, ownerId) {
+    const previous = await owned(slug, ownerId);
+    if (Number(url.searchParams.get('revision')) !== (previous.site.revision || 1)) throw fail('conflict', 409);
+    const files = await ingest(req, url.searchParams.get('type'));
+    const staging = path.join(storage, '.' + crypto.randomUUID());
+    await fs.mkdir(storage, { recursive: true });
+    await fs.mkdir(staging);
+    try {
+      await materialize(staging, files, { ownerId, revision:(previous.site.revision || 1)+1, updatedAt: new Date().toISOString() });
+      const backup = path.join(storage, '.' + crypto.randomUUID());
+      await fs.rename(previous.directory, backup);
+      try { await fs.rename(staging, previous.directory); }
+      catch (error) { await fs.rename(backup, previous.directory); throw error; }
+      await fs.rm(backup, { recursive: true, force: true });
+    } catch (error) {
+      await fs.rm(staging, { recursive: true, force: true });
+      throw error;
+    }
+    return view(slug, ownerId);
+  }
+  async function handle(req, slug, ownerId) {
+    const url = new URL(req.url, 'http://localhost');
+    if (req.method === 'GET' && slug) return view(slug, ownerId);
+    if (req.method === 'POST' && !slug) return create(req, url, ownerId);
+    if (req.method === 'PUT' && slug) return update(req, url, slug, ownerId);
+    throw fail('method', 405);
   }
   async function read(pathname) {
     const parts = pathname.replace(/^\/sites(?=\/)/, '').replace(/^\//, '').split('/');
@@ -118,5 +183,5 @@ if (!isMainThread) {
     await fs.access(path.join(storage, slug, '.ready'));
     return { data: await fs.readFile(path.join(storage, slug, name)), extension: path.extname(name).toLowerCase() };
   }
-  module.exports = { create, read, exists, publicUrl };
+  module.exports = { create, handle, read, exists, publicUrl };
 }

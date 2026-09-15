@@ -81,6 +81,7 @@ test('file links cap at 5, isolate accounts and reopen after delete',async({requ
   await otherCreates(browser,baseURL,async req=>{
     expect((await send(req,'post',baseURL+'/api/file-links?name=report.pdf&slug='+unique('f'),{data:pdf,headers:{'Content-Type':'application/pdf'}})).status()).toBe(201);
   });
+  expect((await send(request,'put','/api/file-links/'+files[0].slug+'?name=report.pdf&revision='+files[0].revision,{data:pdf,headers:{'Content-Type':'application/pdf'}})).status()).toBe(200);
   expect((await send(request,'delete','/api/dashboard-links/transfer-files/'+files[0].slug)).status()).toBe(200);
   expect((await send(request,'post','/api/file-links?name=report.pdf&slug='+unique('f'),{data:pdf,headers:{'Content-Type':'application/pdf'}})).status()).toBe(201);
   await page.goto('/tools/transfer-files.html?lang=en');
@@ -98,6 +99,7 @@ test('static sites cap at 5, isolate accounts and reopen after delete',async({re
   await otherCreates(browser,baseURL,async req=>{
     expect((await send(req,'post',baseURL+'/api/static-sites?type=html&slug='+unique('site'),{data:'<h1>Other</h1>',headers:{'Content-Type':'text/html'}})).status()).toBe(201);
   });
+  expect((await send(request,'put','/api/static-sites/'+sites[0].slug+'?type=html&revision='+(sites[0].revision||1),{data:'<h1>Updated</h1>',headers:{'Content-Type':'text/html'}})).status()).toBe(200);
   expect((await send(request,'delete','/api/dashboard-links/host-html/'+sites[0].slug)).status()).toBe(200);
   expect((await send(request,'post','/api/static-sites?type=html&slug='+unique('site'),{data:'<h1>Again</h1>',headers:{'Content-Type':'text/html'}})).status()).toBe(201);
   await page.goto('/tools/host-html.html?lang=en');

@@ -29,7 +29,7 @@ async function summary(ownerId, includeLinks = false) {
         }
         const site = await record(path.join(target, '.site.json'));
         if (site?.ownerId !== ownerId) continue;
-        try { await fs.access(path.join(target, '.ready')); add('host-html', { id:entry.name, name:entry.name, url:`/${entry.name}/`, status:'published', updatedAt:includeLinks?await modified(path.join(target,'.ready')):null }); }
+        try { await fs.access(path.join(target, '.ready')); add('host-html', { id:entry.name, name:entry.name, url:`/${entry.name}/`, status:'published', updatedAt:includeLinks?site.updatedAt||await modified(path.join(target,'.ready')):null, revision:site.revision||1, manageUrl:`/tools/host-html.html?item=${encodeURIComponent(entry.name)}` }); }
         catch (error) { if (error.code !== 'ENOENT') throw error; }
       }
     })(),
@@ -38,7 +38,7 @@ async function summary(ownerId, includeLinks = false) {
       for (const entry of await entries(directory)) {
         if (!entry.isDirectory()) continue;
         const link = await record(path.join(directory, entry.name, 'link.json'));
-        if (link?.ownerId === ownerId) add(link.kind === 'file' ? 'transfer-files' : 'short-links', { id:link.slug, name:link.filename || link.slug, url:`/${link.slug}`, status:'published', updatedAt:link.updatedAt || (includeLinks?await modified(path.join(directory,entry.name,'link.json')):null), ...(link.kind!=='file'?{revision:link.revision||1,manageUrl:`/tools/short-links.html?link=${encodeURIComponent(link.slug)}`}:{}) });
+        if (link?.ownerId === ownerId) add(link.kind === 'file' ? 'transfer-files' : 'short-links', { id:link.slug, name:link.filename || link.slug, url:`/${link.slug}`, status:'published', updatedAt:link.updatedAt || (includeLinks?await modified(path.join(directory,entry.name,'link.json')):null), revision:link.revision||1, manageUrl:link.kind==='file'?`/tools/transfer-files.html?item=${encodeURIComponent(link.slug)}`:`/tools/short-links.html?link=${encodeURIComponent(link.slug)}` });
       }
     })(),
     (async () => {

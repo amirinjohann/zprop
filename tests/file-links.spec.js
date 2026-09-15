@@ -79,3 +79,29 @@ test('invalid files release names, and upload errors remain recoverable',async({
   await page.locator('[data-action=createFileLink]').click();await expect(page.locator('#tool-status')).toContainText('upload service is unavailable');await expect(page.locator('[data-action=createFileLink]')).toBeEnabled();
   await page.locator('[data-action=clear]').click();await expect(page.locator('#file-summary')).toHaveText('No files selected.');await expect(page.locator('#file-result')).toBeHidden();
 });
+
+test('library edit replaces the published file at the same URL',async({page,request,browser,baseURL})=>{
+  const slug=name(),original=pdf(),updated=Buffer.from('%PDF-1.4\nUpdated file');
+  const created=await request.post(`/api/file-links?name=report.pdf&slug=${slug}`,{data:original});expect(created.status()).toBe(201);
+  const meta=await (await request.get('/api/file-links/'+slug)).json();expect(meta.filename).toBe('report.pdf');expect(meta.revision).toBe(1);
+  expect((await request.put(`/api/file-links/${slug}?name=report.pdf&revision=0`,{data:updated})).status()).toBe(409);
+  expect((await request.put(`/api/file-links/${slug}?name=report.pdf&revision=1`,{data:updated,headers:{Origin:'null'}})).status()).toBe(403);
+  const other=await browser.newContext();
+  try{
+    await other.request.post(baseURL+'/api/auth/register',{data:{email:name()+'@example.com',password:'Test-password-123!'}});
+    for(const method of ['get','put'])expect((await other.request[method](baseURL+'/api/file-links/'+slug,{data:updated})).status()).toBe(404);
+  }finally{await other.close();}
+  await page.goto('/tools/transfer-files.html?lang=en');
+  const card=page.locator('[data-item-id="'+slug+'"]');
+  await expect(card.locator('[data-item-action=edit]')).toBeVisible();
+  await expect(card.locator('[data-item-action=download]')).toHaveCount(0);
+  await card.locator('[data-item-action=edit]').click();
+  await expect(page.locator('[name=slug]')).toHaveValue(slug);
+  await expect(page.locator('[name=slug]')).toHaveJSProperty('readOnly',true);
+  await expect(page.getByRole('button',{name:'Update file link',exact:true})).toBeVisible();
+  await page.locator('[name=files]').setInputFiles({name:'updated.pdf',mimeType:'application/pdf',buffer:updated});
+  await page.getByRole('button',{name:'Update file link',exact:true}).click();
+  await expect(page.locator('#file-result .draft-label')).toHaveText('FILE LINK UPDATED');
+  expect(await (await request.get('/'+slug)).body()).toEqual(updated);
+  const saved=await (await request.get('/api/file-links/'+slug)).json();expect(saved.filename).toBe('updated.pdf');expect(saved.revision).toBe(2);
+});

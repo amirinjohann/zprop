@@ -145,18 +145,21 @@ const server = http.createServer(async (req, res) => {
     finally {release();}
     return;
   }
-  if (['/api/static-sites','/api/file-links'].includes(pathname) && req.method === 'POST') {
+  const fileRoute = pathname.match(/^\/api\/file-links(?:\/([a-zA-Z0-9_-]+))?$/);
+  const siteRoute = pathname.match(/^\/api\/static-sites(?:\/([a-z0-9][a-z0-9-]{1,48}[a-z0-9]))?$/);
+  if (fileRoute || siteRoute) {
     const json = (status, data) => { res.writeHead(status, { 'Content-Type':'application/json', 'Cache-Control':'no-store' }).end(JSON.stringify(data)); };
-    // Uploaded scripts run with an opaque origin and cannot call this endpoint.
-    if (!auth.sameOrigin(req)) { json(403, { error:'origin' }); return; }
-    if (pendingCreates >= 8) { json(429, { error:'busy' }); return; }
+    const slug = (fileRoute || siteRoute)[1];
+    if (req.method !== 'GET' && !auth.sameOrigin(req)) { json(403, { error:'origin' }); return; }
+    if (['POST','PUT'].includes(req.method) && pendingCreates >= 8) { json(429, { error:'busy' }); return; }
     const { previous, release } = lockWrites();
-    pendingCreates++;
+    if (['POST','PUT'].includes(req.method)) pendingCreates++;
     await previous;
     try {
-      requireToolAccess(req); json(201, await (pathname === '/api/file-links' ? fileLinks : sites).create(req, new URL(req.url, 'http://localhost'), auth.session(req).user.id)); }
-    catch (error) { json(error.status || 500, { error:error.status ? error.message : 'server' }); }
-    finally { pendingCreates--; release(); }
+      requireToolAccess(req);
+      json(req.method === 'POST' ? 201 : 200, await (fileRoute ? fileLinks : sites).handle(req, slug, auth.session(req).user.id));
+    } catch (error) { json(error.status || 500, { error:error.status ? error.message : 'server' }); }
+    finally { if (['POST','PUT'].includes(req.method)) pendingCreates--; release(); }
     return;
   }
   if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405).end(); return; }
