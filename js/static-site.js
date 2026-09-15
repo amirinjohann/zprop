@@ -53,7 +53,7 @@
     serviceLink.textContent = t('openService');
     serviceLink.href = window.ZPROP_PUBLIC_ORIGIN + '/tools/host-html.html?lang=' + (language ? 'en' : 'ms');
   }
-  $('#site-prefix').textContent = publicBase.host + '/sites/';
+  $('#site-prefix').textContent = publicBase.host + '/';
   function status(key, error = false) { statusKey = key; $('#tool-status').textContent = key ? t(key) : ''; $('#tool-status').classList.toggle('is-error', error); updateServiceLink(); }
   function switchMode(next) {
     mode = next;

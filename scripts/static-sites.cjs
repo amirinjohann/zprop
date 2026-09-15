@@ -48,6 +48,18 @@ if (!isMainThread) {
   catch (error) { parentPort.postMessage({ error: error.status ? error.message : 'invalidZip', status: error.status || 400 }); }
 } else {
   const { assertRoom, created } = require('./item-limit.cjs');
+  const links = require('./short-links.cjs');
+  const publicUrl = slug => `/${slug}/`;
+  async function exists(slug) {
+    if (!/^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/.test(slug)) return false;
+    try { await fs.access(path.join(storage, slug, '.ready')); return true; }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    try { await fs.access(path.join(storage, slug, '.bio.json')); return true; }
+    catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+  }
+  async function claim(slug) {
+    if (await links.isReserved(slug) || await links.takenByLink(slug)) throw fail('taken', 409);
+  }
   async function create(req, url, ownerId) {
     const type = url.searchParams.get('type');
     if (!['html', 'zip'].includes(type)) throw fail('fileType');
@@ -71,6 +83,7 @@ if (!isMainThread) {
     });
     await fs.mkdir(storage, { recursive: true });
     const slug = requested || crypto.randomBytes(8).toString('hex');
+    await claim(slug);
     const directory = path.join(storage, slug);
     try { await fs.mkdir(directory); } catch (error) { if (error.code === 'EEXIST') throw fail('taken', 409); throw error; }
     try {
@@ -87,10 +100,10 @@ if (!isMainThread) {
       throw error;
     }
     created(ownerId, 'host-html');
-    return { slug, url: `/sites/${slug}/`, files: Object.keys(files).length };
+    return { slug, url: publicUrl(slug), files: Object.keys(files).length };
   }
   async function read(pathname) {
-    const parts = pathname.slice('/sites/'.length).split('/');
+    const parts = pathname.replace(/^\/sites(?=\/)/, '').replace(/^\//, '').split('/');
     const slug = parts.shift();
     if (!/^[a-z0-9-]{3,50}$/.test(slug)) throw fail('notFound', 404);
     const name = parts.join('/') || 'index.html';
@@ -105,5 +118,5 @@ if (!isMainThread) {
     await fs.access(path.join(storage, slug, '.ready'));
     return { data: await fs.readFile(path.join(storage, slug, name)), extension: path.extname(name).toLowerCase() };
   }
-  module.exports = { create, read };
+  module.exports = { create, read, exists, publicUrl };
 }

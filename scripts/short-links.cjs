@@ -4,14 +4,29 @@ const crypto = require('node:crypto');
 const { publicOrigin } = require('../js/public-origin.js');
 const { assertRoom, created, removed } = require('./item-limit.cjs');
 const storage = path.join(require('./data-root.cjs')(), '.short-links');
+const sitesStorage = path.join(require('./data-root.cjs')(), '.generated-sites');
 const fail = (code, status = 400) => Object.assign(new Error(code), { status });
 const validSlug = slug => /^[a-zA-Z0-9_-]{2,50}$/.test(slug);
 const directory = slug => path.join(storage, crypto.createHash('sha256').update(slug.toLowerCase()).digest('hex'));
 const reservedNames = new Set(['admin', 'api', 'sites', 's', 'assets', 'css', 'js', 'tools', 'scripts', 'tests', 'node_modules', 'test-results']);
-async function isReserved(slug) {
-  if (reservedNames.has(slug.toLowerCase())) return true;
+async function isAppRoute(slug) {
+  if (reservedNames.has(String(slug || '').toLowerCase())) return true;
   try { await fs.access(path.resolve(__dirname, '..', slug)); return true; }
   catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+}
+async function hasGeneratedSite(slug) {
+  const name = String(slug || '').toLowerCase();
+  if (!/^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/.test(name)) return false;
+  try { await fs.access(path.join(sitesStorage, name)); return true; }
+  catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+}
+async function takenByLink(slug) {
+  if (!validSlug(slug)) return false;
+  try { await fs.access(path.join(directory(slug), 'link.json')); return true; }
+  catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+}
+async function isReserved(slug) {
+  return await isAppRoute(slug) || await hasGeneratedSite(slug);
 }
 
 // Both file links and redirects claim names in the same shared namespace.
@@ -117,4 +132,4 @@ async function handle(req, slug, ownerId) {
   } finally {await fs.rm(temporary,{force:true});}
   return view(record);
 }
-module.exports = { create, read, handle, isReserved, reserve, release, directory };
+module.exports = { create, read, handle, isReserved, isAppRoute, takenByLink, reserve, release, directory };

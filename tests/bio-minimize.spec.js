@@ -24,7 +24,7 @@ test('minimizing preserves content, preview and publishing while keeping control
   await expect(profile.locator('.bio-block-fields')).toBeHidden();
   await profile.getByRole('switch').click();
   await page.locator('#publish-bio').click();await expect(page.locator('#bio-result')).toBeVisible();
-  expect(await (await request.get('/sites/'+slug+'/')).text()).toContain('Minimized profile');
+  expect(await (await request.get('/'+slug+'/')).text()).toContain('Minimized profile');
   await page.locator('#bio-blocks').scrollIntoViewIfNeeded();
   await page.screenshot({path:'test-results/minimized-blocks-'+info.project.name+'.png'});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

@@ -24,7 +24,7 @@ test('file and static libraries list existing items, copy, download, and confirm
   const file=unique(),site=unique(),bytes=Buffer.from('%PDF-1.4\nLibrary file');
   expect((await request.post('/api/file-links?name=report.pdf&slug='+file,{data:bytes})).status()).toBe(201);
   expect((await request.post('/api/static-sites?type=html&slug='+site,{data:'<h1>Saved website</h1>'})).status()).toBe(201);
-  for(const [category,id,url] of [['transfer-files',file,'/'+file],['host-html',site,'/sites/'+site+'/']]){
+  for(const [category,id,url] of [['transfer-files',file,'/'+file],['host-html',site,'/'+site+'/']]){
     await page.goto('/tools/'+category+'.html?lang=en');
     const card=page.locator('[data-item-id="'+id+'"]');await expect(card).toBeVisible();
     await expect(page.locator('[data-item-id]')).toHaveCount(1);

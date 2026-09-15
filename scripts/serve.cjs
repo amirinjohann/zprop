@@ -169,15 +169,35 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (pathname.startsWith('/sites/')) {
+    const rest = pathname.slice(7);
+    if (!rest) { res.writeHead(404).end('Site or file not found'); return; }
+    res.writeHead(302, { Location:'/' + rest + (/^[^/]+$/.test(rest) ? '/' : ''), 'Cache-Control':'no-store' }).end();
+    return;
+  }
+  async function sendGenerated(sitePath) {
     res.setHeader('Cache-Control','no-store');
-    if (/^\/sites\/[a-z0-9-]+$/.test(pathname)) { res.writeHead(302, { Location:pathname+'/' }).end(); return; }
     try {
-      const result = await sites.read(pathname.endsWith('/') ? pathname+'index.html' : pathname);
+      const result = await sites.read(sitePath.endsWith('/') ? sitePath+'index.html' : sitePath);
       const sandbox = result.bio ? 'sandbox allow-popups allow-popups-to-escape-sandbox' : 'sandbox allow-scripts';
       const scripts = result.bio ? "'none'" : "'self' 'unsafe-inline'";
       res.writeHead(200, { 'Content-Type':types[result.extension] || 'application/octet-stream', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'no-referrer', 'Content-Security-Policy':`${sandbox}; default-src 'self' data: blob:; script-src ${scripts}; style-src 'self' 'unsafe-inline'; connect-src 'none'; frame-src ${result.bio ? "'self'" : "'none'"}; ${result.bio ? "img-src 'self' https: data:;" : ''} object-src 'none'; base-uri 'none'; form-action 'none'` });
       res.end(req.method === 'HEAD' ? undefined : result.data);
     } catch { res.writeHead(404).end('Site or file not found'); }
+  }
+  const generated = pathname.match(/^\/([a-z0-9][a-z0-9-]{1,48}[a-z0-9])(\/.*)?$/);
+  if (generated && !await links.isAppRoute(generated[1]) && await sites.exists(generated[1])) {
+    if (generated[2] === undefined) {
+      try {
+        const link = await links.read(generated[1]);
+        if (link.kind === 'file') { await fileLinks.serve(req, res, link); return; }
+        res.writeHead(302, { Location:link.destination, 'Cache-Control':'no-store', 'Referrer-Policy':'no-referrer' }).end();
+        return;
+      } catch {
+        res.writeHead(302, { Location:`/${generated[1]}/`, 'Cache-Control':'no-store' }).end();
+        return;
+      }
+    }
+    await sendGenerated(pathname);
     return;
   }
   const shortMatch = pathname.match(/^\/([a-zA-Z0-9_-]{2,50})\/?$/);

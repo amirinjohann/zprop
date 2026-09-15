@@ -363,7 +363,7 @@
     publishing=true; $('#bio-fields').disabled=true; $('#publish-bio').firstElementChild.textContent=t('publishing'); status(''); $('#bio-result').hidden=true;
     try {
       const result = await library.save({state,html:publish?documentHtml():undefined,publish});
-      if (!/^\/sites\/[a-z0-9-]{3,50}\/$/.test(result.url)) throw new Error('server');
+      if (!/^\/[a-z0-9][a-z0-9-]{1,48}[a-z0-9]\/$/.test(result.url)) throw new Error('server');
       publishedUrl = new URL(result.url,publishBase).href;
       $('#bio-url').href=publishedUrl; $('#bio-url').textContent=publishedUrl; $('#open-bio').href=publishedUrl; $('#bio-result').hidden=!result.published; status(publish?'':'draftSaved');
     } catch (error) { status(['taken','busy','notFound','conflict','invalidUrl','imageTotal','itemLimit'].includes(error.message)?error.message:'server',true); }

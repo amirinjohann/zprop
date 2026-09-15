@@ -24,12 +24,12 @@ async function summary(ownerId, includeLinks = false) {
         const target = path.join(directory, entry.name);
         const bio = await record(path.join(target, '.bio.json'));
         if (bio) {
-          if (bio.ownerId === ownerId) add('bio-pages', { id:entry.name, name:bio.state.schemaVersion===2?(bio.state.blocks.find(block=>block.type==='profile')?.name || entry.name):(bio.state.name || entry.name), url:bio.html?`/sites/${entry.name}/`:null, status:bio.html?'published':'draft', updatedAt:bio.updatedAt, revision:bio.revision, manageUrl:`/tools/bio-pages.html?page=${entry.name}` });
+          if (bio.ownerId === ownerId) add('bio-pages', { id:entry.name, name:bio.state.schemaVersion===2?(bio.state.blocks.find(block=>block.type==='profile')?.name || entry.name):(bio.state.name || entry.name), url:bio.html?`/${entry.name}/`:null, status:bio.html?'published':'draft', updatedAt:bio.updatedAt, revision:bio.revision, manageUrl:`/tools/bio-pages.html?page=${entry.name}` });
           continue;
         }
         const site = await record(path.join(target, '.site.json'));
         if (site?.ownerId !== ownerId) continue;
-        try { await fs.access(path.join(target, '.ready')); add('host-html', { id:entry.name, name:entry.name, url:`/sites/${entry.name}/`, status:'published', updatedAt:includeLinks?await modified(path.join(target,'.ready')):null }); }
+        try { await fs.access(path.join(target, '.ready')); add('host-html', { id:entry.name, name:entry.name, url:`/${entry.name}/`, status:'published', updatedAt:includeLinks?await modified(path.join(target,'.ready')):null }); }
         catch (error) { if (error.code !== 'ENOENT') throw error; }
       }
     })(),

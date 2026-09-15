@@ -109,5 +109,5 @@ test('published bio edits update the existing row and unsafe names render as tex
   await expect(page.locator('#links-rows img')).toHaveCount(0);
   await expect(page.locator('#links-rows')).toContainText('Published');
   await expect(page.locator('#links-total')).toHaveText('1');
-  await expect(page.locator('#links-rows .links-url')).toHaveAttribute('href',new RegExp('/sites/'+slug+'/$'));
+  await expect(page.locator('#links-rows .links-url')).toHaveAttribute('href',new RegExp('/'+slug+'/$'));
 });

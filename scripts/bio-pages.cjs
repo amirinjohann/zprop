@@ -3,6 +3,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const {upgrade,socialPlatforms} = require('../js/bio-model.js');
 const { assertRoom, created, removed } = require('./item-limit.cjs');
+const links = require('./short-links.cjs');
 const storage = path.join(require('./data-root.cjs')(), '.generated-sites');
 const fail = (code, status = 400) => Object.assign(new Error(code), {status});
 function directory(slug) {
@@ -82,7 +83,7 @@ async function owned(slug, ownerId) {
   if(record.ownerId!==ownerId)throw fail('notFound',404);
   return record;
 }
-const summary=(slug,record)=>({slug,url:`/sites/${slug}/`,name:record.state.schemaVersion===2?(record.state.blocks.find(block=>block.type==='profile')?.name||slug):record.state.name,published:!!record.html,updatedAt:record.updatedAt,revision:record.revision});
+const summary=(slug,record)=>({slug,url:`/${slug}/`,name:record.state.schemaVersion===2?(record.state.blocks.find(block=>block.type==='profile')?.name||slug):record.state.name,published:!!record.html,updatedAt:record.updatedAt,revision:record.revision});
 const full=(slug,record)=>({...summary(slug,record),state:upgrade(record.state)});
 async function write(target,record) {
   const temporary=path.join(target,`.bio-${crypto.randomUUID()}.tmp`);
@@ -102,6 +103,7 @@ async function handle(req,slug,ownerId) {
   if(req.method==='POST'&&!slug) {
     const data=await body(req),target=directory(data?.slug),state=model(data.state,false);
     await assertRoom(ownerId,'bio-pages');
+    if (await links.isReserved(data.slug) || await links.takenByLink(data.slug)) throw fail('taken', 409);
     const record={ownerId,state,html:null,revision:1,updatedAt:new Date().toISOString()};
     await fs.mkdir(storage,{recursive:true});
     try{await fs.mkdir(target);}catch(error){if(error.code==='EEXIST')throw fail('taken',409);throw error;}

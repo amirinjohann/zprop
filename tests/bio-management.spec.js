@@ -11,17 +11,17 @@ test('requires a name, saves pages, updates the same live link, keeps names immu
   const slug=unique();await page.locator('[name=newSlug]').fill(slug);await page.locator('#confirm-create-bio').click();
   await expect(page.locator('#tool-form')).toBeVisible();
   await expandBlocks(page);
-  expect((await request.get(`/sites/${slug}/`)).status()).toBe(404);
+  expect((await request.get(`/${slug}/`)).status()).toBe(404);
   await page.locator('[name=name]').fill('Saved studio');
   await page.locator('[data-key=url]').fill(baseURL+'/landing.html');
   await page.locator('#save-bio-draft').click();
   await expect(page.locator('#tool-status')).toHaveText('Draft saved.');
   await page.reload();await expect(page.locator('[name=name]')).toHaveValue('Saved studio');
   await page.locator('#publish-bio').click();await expect(page.locator('#bio-result')).toBeVisible();
-  expect(await (await request.get(`/sites/${slug}/`)).text()).toContain('Saved studio');
+  expect(await (await request.get(`/${slug}/`)).text()).toContain('Saved studio');
   const viewer=await browser.newContext();
   try{
-    const publicPage=await viewer.newPage();await publicPage.goto(`${baseURL}/sites/${slug}/`);
+    const publicPage=await viewer.newPage();await publicPage.goto(`${baseURL}/${slug}/`);
     const popupPromise=publicPage.waitForEvent('popup');await publicPage.locator('.bio-page-link').click();
     const popup=await popupPromise;await expect(popup).toHaveURL(/\/landing.html/);
   }finally{await viewer.close();}
@@ -33,19 +33,19 @@ test('requires a name, saves pages, updates the same live link, keeps names immu
   await page.locator('[name=name]').fill('Updated studio');
   await expect(page.locator('#publish-bio')).toContainText('Save changes');
   await page.locator('#publish-bio').click();await expect(page.locator('#bio-dirty')).toBeHidden();
-  await expect(page.locator('#bio-url')).toHaveText(`${baseURL}/sites/${slug}/`);
-  expect(await (await request.get(`/sites/${slug}/`)).text()).toContain('Updated studio');
+  await expect(page.locator('#bio-url')).toHaveText(`${baseURL}/${slug}/`);
+  expect(await (await request.get(`/${slug}/`)).text()).toContain('Updated studio');
   await expect(page.locator('#tool-form [name=slug]')).toHaveCount(0);
   const record=await (await request.get('/api/bio-pages/'+slug)).json();
   const rename=await request.put('/api/bio-pages/'+slug,{data:{...record,slug:unique(),publish:false}});
   expect(rename.status()).toBe(400);expect(await rename.json()).toEqual({error:'slugLocked'});
-  expect((await request.get('/sites/'+slug+'/')).status()).toBe(200);
+  expect((await request.get('/'+slug+'/')).status()).toBe(200);
   await page.locator('#back-bio-list').click();await page.locator(`[data-page-slug="${slug}"] [data-page-action=delete]`).click();
   await expect(page.locator('#delete-bio-name')).toContainText(slug);
-  await page.locator('#cancel-delete-bio').click();expect((await request.get(`/sites/${slug}/`)).status()).toBe(200);
+  await page.locator('#cancel-delete-bio').click();expect((await request.get(`/${slug}/`)).status()).toBe(200);
   await page.locator(`[data-page-slug="${slug}"] [data-page-action=delete]`).click();await page.locator('#confirm-delete-bio').click();
   await expect(page.locator('[data-page-slug]')).toHaveCount(0);
-  expect((await request.get(`/sites/${slug}/`)).status()).toBe(404);
+  expect((await request.get(`/${slug}/`)).status()).toBe(404);
   await page.reload();await expect(page.locator('.bio-library-empty')).toBeVisible();
 });
 test('ownership, unique names and revision checks protect saved pages',async({page,request,browser,baseURL})=>{
@@ -63,13 +63,13 @@ test('ownership, unique names and revision checks protect saved pages',async({pa
     expect((await request.post('/api/bio-pages',{data:{slug:unique(),state:record.state},headers:{Origin:'null'}})).status()).toBe(403);
     const updated=await request.put(`/api/bio-pages/${slug}`,{data:{...record,publish:true,html:'<h1>Owner</h1>'}});expect(updated.status()).toBe(200);
     expect((await request.put(`/api/bio-pages/${slug}`,{data:{...record,publish:true,html:'stale'}})).status()).toBe(409);
-    expect(await (await other.request.get(baseURL+`/sites/${slug}/`)).text()).toBe('<h1>Owner</h1>');
+    expect(await (await other.request.get(baseURL+`/${slug}/`)).text()).toBe('<h1>Owner</h1>');
     const conflict=unique();const latest=await updated.json();
     const claims=await Promise.all([request.post(`/api/static-sites?type=html&slug=${conflict}`,{data:'<h1>Static</h1>'}),request.post('/api/bio-pages',{data:{slug:conflict,state:record.state}})]);
     expect(claims.map(result=>result.status()).sort()).toEqual([201,409]);
     expect((await request.put(`/api/bio-pages/${slug}`,{data:{...latest,slug:conflict,publish:false}})).status()).toBe(400);
     expect((await request.get(`/api/bio-pages/${slug}`)).status()).toBe(200);
-    expect((await request.get(`/sites/${slug}/.bio.json`)).status()).toBe(404);
+    expect((await request.get(`/${slug}/.bio.json`)).status()).toBe(404);
   }finally{await other.close();}
 });
 test('expanded fields stay visible and blocks drag with mouse or touch',async({page,context},info)=>{

@@ -89,7 +89,7 @@ test('appearance templates preview, customize, localize and survive saving and p
   await page.locator('[data-tab=appearance]').click();
   await expect(page.locator('[data-template=midnight]')).toHaveAttribute('aria-pressed','true');
   await page.locator('#publish-bio').click();await expect(page.locator('#bio-result')).toBeVisible();
-  const html=await (await request.get('/sites/'+slug+'/')).text();
+  const html=await (await request.get('/'+slug+'/')).text();
   expect(html).toContain('--bio-bg:#141b2d');expect(html).toContain('--bio-accent:#bfcaff');
   await expect(page.locator('.bio-phone')).not.toHaveCSS('box-shadow','none');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

@@ -17,7 +17,7 @@ test('each block status survives saving and controls preview, exports and publis
   await page.locator('[data-key=label]').fill('Saved hidden link');
   await page.locator('[data-key=url]').fill('unfinished url');
   await page.locator('#publish-bio').click();await expect(page.locator('#bio-result')).toBeVisible();
-  const html=await (await request.get('/sites/'+slug+'/')).text();
+  const html=await (await request.get('/'+slug+'/')).text();
   expect(html).not.toContain('Hidden profile name');expect(html).not.toContain('Hidden biography');
   expect(html).not.toContain('Saved hidden link');expect(html).not.toContain('unfinished url');
   const downloadPromise=page.waitForEvent('download');await page.locator('[data-action=downloadHtml]').click();
@@ -30,12 +30,12 @@ test('each block status survives saving and controls preview, exports and publis
   await expect(profile.getByRole('switch')).toBeChecked();await expect(profile.getByRole('switch')).toBeFocused();
   await expect(page.locator('.bio-page-profile h3')).toHaveText('Hidden profile name');
   await page.locator('#save-bio-draft').click();await expect(page.locator('#tool-status')).toHaveText('Draft saved.');
-  expect(await (await request.get('/sites/'+slug+'/')).text()).toBe(html);
+  expect(await (await request.get('/'+slug+'/')).text()).toBe(html);
   await page.reload();await expect(profile.getByRole('switch')).toBeChecked();
   await page.locator('[data-language=ms]').click();await expect(profile.getByRole('switch')).toContainText('Aktif');
   await page.locator('[data-language=en]').click();await expect(profile.getByRole('switch')).toContainText('On');
   await page.locator('#publish-bio').click();await expect(page.locator('#bio-result')).toBeVisible();
-  expect(await (await request.get('/sites/'+slug+'/')).text()).toContain('Hidden profile name');
+  expect(await (await request.get('/'+slug+'/')).text()).toContain('Hidden profile name');
   const link=page.locator('[data-block-type=link]');await link.getByRole('switch').click();
   await page.locator('#publish-bio').click();expect(await page.locator('[data-key=url]').evaluate(el=>el.validity.valid)).toBe(false);
   await page.locator('[data-key=url]').fill('https://example.com/');

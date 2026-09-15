@@ -55,7 +55,7 @@ test('new templates change layouts, keep social circles, and persist to publishe
     await expect(page.locator('[data-template='+layout+'] .bio-template-social svg')).toHaveCount(3);
     await expect(page.locator('#bio-preview .bio-page-profile h3')).toHaveText('ZPROP');
     await page.locator('#publish-bio').click();await expect(page.locator('#bio-result')).toBeVisible();
-    expect(await (await request.get('/sites/'+slug+'/')).text()).toContain('data-layout="'+layout+'"');
+    expect(await (await request.get('/'+slug+'/')).text()).toContain('data-layout="'+layout+'"');
     await page.reload();await expect(page.locator('#bio-preview')).toHaveAttribute('data-layout',layout);
     await page.locator('[data-tab=appearance]').click();
     await expect(page.locator('[data-template='+layout+']')).toHaveAttribute('aria-pressed','true');
@@ -98,7 +98,7 @@ test('custom HTML renders styles in isolation, persists, publishes and exports',
   const html=await fs.readFile(await (await downloadPromise).path(),'utf8');
   const viewer=await browser.newContext();
   try{
-    const publicPage=await viewer.newPage();await publicPage.goto('/sites/'+slug+'/');
+    const publicPage=await viewer.newPage();await publicPage.goto('/'+slug+'/');
     await expect(publicPage.frameLocator('.bio-custom-html').locator('h2')).toHaveText('Summer gathering');
     await expect(publicPage.frameLocator('.bio-custom-html').locator('h2')).toHaveCSS('color','rgb(90, 30, 130)');
     expect(await publicPage.frameLocator('.bio-custom-html').locator('body').evaluate(()=>window.customRan)).toBeUndefined();
